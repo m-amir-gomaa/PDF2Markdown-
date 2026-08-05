@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF2Markdown GPU Extractor</title>
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- HTMX for AJAX and SSE -->
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <script src="https://unpkg.com/htmx.org/dist/ext/sse.js"></script>
+    <!-- Alpine.js for lightweight UI logic (drag & drop) -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.13.3/dist/cdn.min.js"></script>
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col font-sans selection:bg-blue-500/30">
+
+    <main class="flex-grow container mx-auto px-4 py-12 max-w-4xl">
+        
+        <header class="text-center mb-12 fade-in">
+            <h1 class="text-5xl font-extrabold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-emerald-400 mb-4">
+                PDF to Markdown
+            </h1>
+            <p class="text-lg text-slate-400 max-w-2xl mx-auto">
+                Serverless GPU-accelerated PDF extraction. Extracts text, tables, and images with layout preservation.
+            </p>
+        </header>
+
+        <div class="bg-slate-800/50 backdrop-blur-xl border border-slate-700 rounded-2xl p-8 shadow-2xl fade-in" style="animation-delay: 100ms;">
+            
+            <form id="upload-form" 
+                  hx-post="/upload" 
+                  hx-encoding="multipart/form-data" 
+                  hx-target="#result-area" 
+                  hx-indicator="#loading-indicator"
+                  x-data="{ 
+                      isDragging: false, 
+                      file: null,
+                      handleDrop(e) {
+                          this.isDragging = false;
+                          if(e.dataTransfer.files.length > 0) {
+                              this.file = e.dataTransfer.files[0];
+                              this.$refs.fileInput.files = e.dataTransfer.files;
+                          }
+                      }
+                  }">
+                  
+                <!-- Credentials Section (Premium UI look) -->
+                <div class="mb-8 p-4 bg-slate-900/50 rounded-xl border border-slate-700/50">
+                    <h3 class="text-sm font-semibold text-slate-300 uppercase tracking-wider mb-4 flex items-center gap-2">
+                        <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+                        Modal Credentials
+                    </h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs text-slate-500 mb-1">Token ID</label>
+                            <input type="text" name="token_id" placeholder="ak-..." class="w-full bg-slate-800 border border-slate-700 rounded p-2 text-sm text-slate-300 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors">
+                        </div>
+                        <div>
+                            <label class="block text-xs text-slate-500 mb-1">Token Secret</label>
+                            <input type="password" name="token_secret" placeholder="as-..." class="w-full bg-slate-800 border border-slate-700 rounded p-2 text-sm text-slate-300 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Drag & Drop Zone -->
+                <div class="relative group">
+                    <div class="absolute -inset-1 bg-gradient-to-r from-blue-500 to-emerald-500 rounded-xl blur opacity-25 group-hover:opacity-50 transition duration-1000 group-hover:duration-200"></div>
+                    <div class="relative bg-slate-900 border-2 border-dashed rounded-xl p-10 text-center transition-all duration-300 ease-out"
+                         :class="isDragging ? 'border-blue-400 bg-blue-900/20' : 'border-slate-600 hover:border-slate-500 hover:bg-slate-800/80'"
+                         @dragover.prevent="isDragging = true"
+                         @dragleave.prevent="isDragging = false"
+                         @drop.prevent="handleDrop($event)">
+                        
+                        <input type="file" name="file" accept=".pdf" class="hidden" x-ref="fileInput" @change="file = $event.target.files[0]">
+                        
+                        <div class="space-y-4">
+                            <div class="flex justify-center" x-show="!file">
+                                <svg class="w-16 h-16 text-slate-400 group-hover:text-blue-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                                </svg>
+                            </div>
+                            
+                            <div class="flex justify-center" x-show="file" style="display: none;">
+                                <svg class="w-16 h-16 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                                </svg>
+                            </div>
+
+                            <div class="text-slate-300">
+                                <p class="text-lg font-medium" x-show="!file">Drag and drop your PDF here</p>
+                                <p class="text-lg font-medium text-emerald-400" x-show="file" x-text="file?.name" style="display: none;"></p>
+                                <p class="text-sm text-slate-500 mt-1">or <button type="button" class="text-blue-400 hover:text-blue-300 underline" @click="$refs.fileInput.click()">browse files</button></p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Submit Button -->
+                <div class="mt-8 flex justify-center">
+                    <button type="submit" 
+                            class="relative inline-flex items-center justify-center px-8 py-4 text-base font-bold text-white transition-all duration-200 bg-blue-600 border border-transparent rounded-lg hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-600 focus:ring-offset-slate-900 group overflow-hidden">
+                        <span class="absolute w-0 h-0 transition-all duration-500 ease-out bg-white rounded-full group-hover:w-56 group-hover:h-56 opacity-10"></span>
+                        <svg id="loading-indicator" class="htmx-indicator animate-spin -ml-1 mr-3 h-5 w-5 text-white hidden" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        <span class="relative">Extract to Markdown</span>
+                    </button>
+                </div>
+            </form>
+
+            <!-- HTMX swaps the streaming UI in here -->
+            <div id="result-area"></div>
+            
+        </div>
+    </main>
+
+    <footer class="py-6 text-center text-slate-500 text-sm">
+        Built for serverless GPU extraction with Modal.
+    </footer>
+
+</body>
+</html>
