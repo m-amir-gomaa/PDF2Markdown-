@@ -20,7 +20,7 @@ class LemonVerifier:
 
     async def verify(self, key):
         s = self.settings
-        if not s.billing_ready:
+        if not (s.commercial_model == 'subscription_with_included_compute' and s.checkout_url.startswith('https://') and s.store_id and s.variant_id and s.lemon_api_key):
             raise BillingError('Subscriptions are opening soon.')
         if not isinstance(key,str) or not 10 <= len(key) <= 200:
             raise BillingError('Enter the purchase key from your receipt.')

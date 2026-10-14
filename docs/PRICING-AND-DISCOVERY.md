@@ -1,3 +1,7 @@
+## Superseded monthly pricing
+
+Amir subsequently authorized a better pricing model. Current implementation uses one-time processing packs without recurring fees; read BOOK-RELEASE.md. The monthly calculations below are retained as historical comparison, not the current offer.
+
 # Pricing and discovery — 14 October 2026
 
 Confirmed user objective: customers fund processing separately and pay $1/month for access. Cadence is resolved. The user intends this as profit, but a $1 price does not establish $1 net profit. No pricing is activated by this analysis.

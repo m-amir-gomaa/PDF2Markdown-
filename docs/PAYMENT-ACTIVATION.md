@@ -1,0 +1,17 @@
+# Payment activation and recovery
+
+Technical implementation is present; checkout stays disabled without real configuration. No seller account approval, product creation, live checkout, provider webhook delivery or bank payout was performed. Owner identity/payment-provider onboarding cannot be replaced by fixture tests.
+
+1. Use an approved Lemon Squeezy store for this hosted conversion service. Confirm with the provider that these non-transferable, consumable processing packs are accepted under the store's product model. The existing business paperwork/account eligibility work is separate from this code release.
+2. Create one-time USD $5 and $10 processing-pack variants. Configure quantity one, no subscription/free trial/pay-what-you-want, no unapproved discounting, and non-expiring purchase keys. The public service does not accept monthly entitlement as compute credit.
+3. In the store's test environment, verify checkout, generated purchase key and signed order_created/order_refunded payloads against an isolated ledger using local test tooling. Public test-mode grants intentionally stay disabled. Include partial refund, duplicate/delayed events, wrong variant/store and account recovery.
+4. Set a signing secret and point the webhook to `https://m-amir-gomaa--mineru-pdf-extractor-web-app.modal.run/api/payment-event` for the activated environment. The server re-fetches the order from the provider before applying an event. Browser success redirects cannot grant funds.
+5. In Modal, edit the separate secret `document-studio-payments`: LEMON_STORE_ID, LEMON_API_KEY, LEMON_WEBHOOK_SECRET, LEMON_VARIANT_5, LEMON_VARIANT_10 and BILLING_MODE=live. Do not paste secret values into chat/Git, overwrite `document-studio-session`, or change its existing Fernet key. The payment secret was created with only BILLING_MODE=test, so no real API credentials or products are connected.
+6. Redeploy using `.venv/bin/python -m modal deploy app.py`. Confirm /health reports billing_enabled only after configuration and verification. Complete a controlled genuine purchase/refund and verify credit ledger, customer restoration and provider receipt before publicly advertising paid conversion.
+7. Finalize customer refund/privacy/support terms, and check actual measured compute/processor fees against the launch tariff. Use original/openly licensed documents for public examples; retain source inspection for technical fidelity.
+
+For missed refunds, use owner environment credentials and `.venv/bin/python -m scripts.reconcile_processing_orders`. It reads authoritative order status, revokes newly refunded credit and cancels queued work when the resulting account balance is negative. Credentials are never printed. A refund after credit was consumed can leave a negative account balance and prevent new work; completed outputs remain accessible until their normal expiry.
+
+If dispatch is uncertain, inspect the existing job; cancel queued work to release unused credit rather than creating an automatic paid retry. A hard-killed worker is reconciled after its deadline on status polling/hourly cleanup. The app exposes named status/error states and preserves completed sections.
+
+Rollback: restore the previous committed source and redeploy; preserve existing volumes and the session secret. The new books.sqlite is a separate additive database. The original state.sqlite and original archive files remain in place. Do not delete volumes or overwrite live credit balances to roll back UI code.

@@ -1,72 +1,75 @@
 # Document Studio
 
-Hosted PDF-to-Markdown conversion using MinerU on Amir's Modal account. Users receive portable files for their own reading, editing and LLM workflows. The product does not generate study materials or teach the document's content.
+Hosted PDF-to-Markdown conversion for books and technical material, using MinerU on Amir's Modal account. Inspect selected pages, review issues, correct text and export portable files for your own editor or LLM workflow.
 
-[Public limited trial](https://m-amir-gomaa--mineru-pdf-extractor-web-app.modal.run) · [Conversion specification](docs/CONVERSION-PRODUCT.md) · [Pricing research](docs/PRICING-AND-DISCOVERY.md)
+[Live bounded sample](https://m-amir-gomaa--mineru-pdf-extractor-web-app.modal.run) · [Implemented features / pricing / evidence](docs/BOOK-RELEASE.md) · [Payment activation](docs/PAYMENT-ACTIVATION.md)
 
-## Current release
+## Current implementation
 
-- One-page PDF trial, up to 1 MiB, with persistent per-session/IP and global quotas.
-- Cloud MinerU 2.7.6 conversion to Markdown/images.
-- Download ZIP includes the original PDF, available block/page metadata, PDF-page navigation and a report of detectable replacement glyphs and broken image references.
-- Session-owned job status/downloads and duplicate-submission suppression.
-- Results expire after 48 hours; hourly cleanup deletes expired archives.
-- Planned $1/month access plus separately paid processing. **Payments and processing credits are not live.** The old included-compute subscription verifier is disabled draft code, not the selected billing design.
+- Books up to 64 MiB / 1,000 PDF pages; inspect up to five PDFs, each confirmed separately.
+- Original PDF page selection, price confirmation and text-layer inspection before extraction.
+- Automatic or forced OCR with pinned MinerU 2.7.6; cheaper explicit text-only extraction without GPU/OCR/images.
+- Bounded 20-page sections, persistent jobs, partial output, cancellation and selective reprocessing.
+- Source-page review, symptom reports, corrections with history and stale-edit protection.
+- Single-file, per-page, page-group or PDF-bookmark exports with relative image paths, original engine output, manifests and optional source PDF.
+- Private session ownership, account recovery key, source/output deletion and 48-hour file expiry.
+- Transactional processing-credit reserve/settle/release and one-time pack integration. **Real seller/product configuration and actual payment delivery are not activated or verified.**
 
-A real public synthetic PDF upload/conversion/download passed. The trial is not a verified full-book service. Source-page metadata and absence of replacement glyphs do not certify extraction accuracy. Specialized symbols, formulas, tables, reading order and missing content need comparison with the source.
+No recurring access fee. Launch tariff: MinerU $0.50/job + $0.005/selected page; text-only $0.25 + $0.001/page. Prepaid packs planned at $5/$10. Reprocessing completed pages has a $0.20 service fee plus page usage; failed-page retry does not repeat an already charged initial fee. Credits do not expire; files/edits do. This is a service tariff, not exact measured compute pass-through or guaranteed net profit.
 
 ## Architecture
 
 ```text
-Browser: encrypted session + CSRF, upload/status/download
-   |
+Browser: encrypted session + CSRF
+   | inspect PDF / review quote / confirm
    v
-Modal CPU FastAPI web service
-   | reserve job before dispatch     | owned archive download
-   v                                v
-Single-writer ledger function       Private result volume
-   | SQLite on ledger volume          ^
-   | transactional quotas             | ZIP
-   v                                  |
-Modal A10G worker -> bounded MinerU CLI -> source-aware export
-   |
-   +-> persistent model cache
+Modal CPU FastAPI (web/studio.py)
+   |                         |
+   v                         v
+Serialized book_store       Private source/section volume
+   | books.sqlite            ^
+   | atomic credit holds     |
+   v                         |
+CPU coordinator -> bounded GPU or CPU text workers
+   | successful section settles once; failure releases allowance
+   v
+Source-aware pages -> corrections/history -> portable ZIP export
 
-Hourly cleanup -> expired jobs + archives
+Signed payment event + fresh provider order -> grant/revoke credits once
+Hourly cleanup -> expired files; credit/account records remain separate
 ```
 
-The browser accepts no Modal tokens. The worker is invoked privately through Modal RPC; the former unauthenticated `/upload` route is gone. One serialized ledger container owns all SQLite writes. This is a bounded small-service architecture, not demonstrated high-volume scalability. Polling replaces the previous SSE/log stream.
+The active ledger is `/ledger/books.sqlite`; the original prototype's `/ledger/state.sqlite` is preserved separately. Each has one writer function. Do not run a second app/writer on the same volume. Owner probes invoke deployed functions. The original authenticated `extract_pdf` remains available for preparation scripts; no public Modal credentials are collected.
 
-## Runtime and deployment
+Initial CPU/GPU concurrency, page-attempt and upload caps are listed in [release notes](docs/BOOK-RELEASE.md). This is a bounded early service, not demonstrated thousands-of-concurrent-user capacity. OCR can damage symbols or lose content; review flags and source metadata do not certify correctness. Unknown blocks and original engine output remain available for inspection.
 
-Python 3.13 and Modal SDK 1.5.3 are used locally; the GPU image uses Python 3.12. CPU/GPU direct package versions are defined in modal_fn.py. Transitive package/model revisions are not all pinned, so a fresh future image is not guaranteed byte-identical. No local GPU or model download is needed.
+## Development and deployment
+
+Python 3.13; Modal SDK 1.5.3. GPU image uses Python 3.12. Direct package versions are pinned; transitive/model revisions are not all pinned. No local AI weights or GPU setup are required.
 
 ```sh
 python3.13 -m venv .venv
 .venv/bin/pip install -r requirements-dev.txt
+.venv/bin/python -m unittest discover -s tests -q
+node --check static/app.js
+.venv/bin/ruff check --select E9,F63,F7,F82,F401 web/books.py web/credits.py web/documents.py web/studio.py
+.venv/bin/python -m modal deploy app.py
 ```
 
-Use existing owner Modal authentication or the official Modal login. Store `DOCUMENT_STUDIO_SESSION_KEY` as a valid Fernet key in the named Modal secret `document-studio-session`; never log or commit it. Reuse an existing key to preserve sessions. No payment secret is required for the bounded trial.
+Owner Modal authentication is required. Keep the existing Fernet key in `document-studio-session`; changing it invalidates sessions and key-derived recovery identities. The separate `document-studio-payments` secret currently contains only BILLING_MODE=test. Public test-mode grants are disabled. See [activation steps](docs/PAYMENT-ACTIVATION.md) before live charging.
+
+For a local browser fixture with real text extraction and explicit synthetic credit, run:
 
 ```sh
-.venv/bin/python -m modal deploy app.py
-.venv/bin/python -m modal app logs mineru-pdf-extractor --tail 100
-.venv/bin/python -m unittest discover -s tests -v
-node --check static/app.js
+.venv/bin/python -m uvicorn scripts.preview_books:app --host 127.0.0.1 --port 8768
 ```
 
-Deployment replaces the existing app of the same name. Private owner extraction remains available as `mineru-pdf-extractor.extract_pdf` for authenticated preparation scripts; its larger bounds do not describe public trial capacity. Historical scripts/test_e2e.py targets the retired SSE/BYO interface; use tests/ for the current implementation.
+This fixture is not deployed, does not process payments or run local MinerU, and supports text-only execution. For owner-only cloud verification through existing deployed functions, use `.venv/bin/python -m scripts.probe_deployed_books --pdf <original-test.pdf> --mode text` or `--mode auto`. It seeds an explicit internal credit fixture; this does not verify a purchase. Historical scripts/test_e2e.py targets the retired SSE/BYO interface and is not the active release test.
 
-## Evidence and limits
+## Verification and limits
 
-22 automated tests cover real SQLite concurrency/persistence, sessions/CSRF/ownership, PDF bounds, archive traversal, idempotency, simulated MinerU output and mocked subscription-provider validation. Provider mocks do not establish payment delivery or an activated seller account.
+The current 48-test automated suite, real Modal extraction, live public trial/edit/export and responsive browser evidence are recorded in [BOOK-RELEASE.md](docs/BOOK-RELEASE.md). A complete 1,000-page synthetic PDF passed deployed text-layer extraction across 50 sections with all pages exported and correct credit settlement; this is not a GPU whole-book fidelity benchmark. Provider validation/signature/refund tests use simulated HTTP. Representative difficult-document comparison and real merchant delivery remain distinct work.
 
-On 14 October 2026, a real original one-page PDF converted on Modal; the public upload/status/download path produced a 2,295-byte ZIP, a repeated request returned the same job, and another session was denied access. System Chromium browser checks passed at widths 320, 390, 768 and 1440 with its sandbox enabled: no horizontal overflow or page errors, oversize/invalid-PDF error handling, retry control and keyboard disclosure. Phone/desktop screenshots were inspected. Private verification artifacts are ignored. This is one synthetic document, not a comparative academic-document benchmark or Safari/physical-device certification.
+Results are private through session ownership, not a claim of zero provider retention. Hard-killed workers reconcile through deadlines; uncertain dispatch never automatically spends on a retry. Scheduled cleanup, storage, cache and compute can incur charges. Shared-IP trial limits can affect legitimate users.
 
-Trial quotas protect owner spending but can reject legitimate users sharing an IP. Results are private through session ownership, not a claim of zero provider retention or encryption at rest. Hard worker termination or indeterminate dispatch currently needs owner review before retrying; no automatic billed retry occurs. Hourly cleanup has a small scheduled usage cost. Storage and cache also count as usage; hosting is not guaranteed literally free when idle.
-
-Paid release requires a transactional processing-credit ledger, verified payment events/refunds, explicit tariffs/limits and failure-cost rules, usable account recovery, and a real approved seller/product. Subscription entitlement alone must not authorize unpaid GPU processing. Full-book/range processing, selective retries and repair tools are specification candidates in docs/CONVERSION-PRODUCT.md, not shipped features.
-
-## Source and dependencies
-
-[Upstream MinerU 2.7.6](https://github.com/opendatalab/MinerU/tree/mineru-2.7.6-released) is used unmodified through a subprocess. Its release license is AGPL-3.0; see [dependency notes](docs/THIRD-PARTY.md). Do not apply current upstream master licensing retroactively. New source books, extracted collections, authentication and local environments are ignored and are not added by this change. Historical tracked sources already exist in this repository; ignore rules do not remove them or rewrite history.
+[Unmodified MinerU 2.7.6 source](https://github.com/opendatalab/MinerU/tree/mineru-2.7.6-released) / AGPL-3.0 release attribution is visible in the UI. [Dependency notes](docs/THIRD-PARTY.md) distinguish exact-release licensing from current upstream master. New books, extracted collections, credentials, local environments and test artifacts are ignored. Historical tracked sources already exist; this change does not remove them or rewrite history.

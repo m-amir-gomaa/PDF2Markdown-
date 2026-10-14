@@ -35,10 +35,10 @@ def should_keep(path):
         p.name.endswith(('_content_list.json','_content_list_v2.json')) or p.name in ('content_list.json','content_list_v2.json'))
 
 
-def convert_pdf(data,seconds,runner=subprocess.run,max_result=MAX_RESULT):
+def convert_pdf(data,seconds,runner=subprocess.run,max_result=MAX_RESULT,lang="latin",method="auto"):
     with tempfile.TemporaryDirectory(prefix='document-studio-') as folder:
         root=Path(folder);source=root/'document.pdf';source.write_bytes(data);out=root/'out'
-        runner(['mineru','-p',str(source),'-o',str(out),'-b','pipeline','-m','auto','-l','latin'],
+        runner(['mineru','-p',str(source),'-o',str(out),'-b','pipeline','-m',method,'-l',lang],
                check=True,timeout=max(1,seconds-15),stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
         markdown=sorted(out.rglob('*.md'))
         if len(markdown)!=1 or not markdown[0].read_text(encoding='utf-8').strip():

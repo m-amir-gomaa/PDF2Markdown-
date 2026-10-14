@@ -1,3 +1,7 @@
+## Latest implementation override
+
+Amir approved the book/range/review/repair/export features and delegated a better modest-margin pricing model. The selected implementation is one-time $5/$10 consumable processing credits, no recurring access fee, with per-job/per-page service tariffs. The former $1/month proposal is superseded. Read BOOK-RELEASE.md and PAYMENT-ACTIVATION.md. Code and real conversion evidence do not establish activated payments or perfect book fidelity.
+
 # Document Studio decisions — 14 October 2026
 
 Latest user instructions supersede earlier drafts:
