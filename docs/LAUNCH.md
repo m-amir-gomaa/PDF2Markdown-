@@ -22,7 +22,7 @@ Updated 14 October 2026. Document Studio is a working, bounded PDF-to-Markdown u
 
 ## Owner account status and remaining answer
 
-- Screenshot supplied by Amir shows Lemon Squeezy store creation in progress; creation/activation/approval are not yet verified. Do not send API keys in chat.
+- On 15 October 2026 Amir reported creating a Lemon Squeezy store named amir2006 and asked about renaming it. The exact subdomain, store ID, activation and seller approval are not yet verified. Do not send API keys in chat.
 - Amir supplied mo.gomaa.formal@gmail.com for purchase/refund/security support; inbox delivery has not been tested and no message was sent.
 - What maximum monthly **out-of-pocket** Modal charge should apply while validating: $0, $10, or another amount? The app's $25 admission allowance is an estimate, not that charge limit.
 
