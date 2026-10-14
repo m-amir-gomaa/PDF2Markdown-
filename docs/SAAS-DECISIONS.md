@@ -8,6 +8,7 @@ Latest user authorization: finish the PDF-to-Markdown product, launch safeguards
 - Public free sample is bounded to one selected page; paid work requires a server-confirmed funded quote. Public test-mode grants stay disabled.
 - Actual seller approval, processing-pack acceptance, provider test delivery, live purchase/refund/payout and actual customer margins remain unverified. No live charge is enabled by fixture tests.
 - Owner-only operations use existing Modal authentication, internal admission budgets/pause and private local reports; no extra analytics/monitoring subscription or public admin surface.
+- Amir designated mo.gomaa.formal@gmail.com for customer purchase/refund/security support on 14 October 2026. Inbox delivery has not been tested; no message was sent. His screenshot shows store creation in progress, not an approved seller account. The requested Modal net out-of-pocket ceiling remains unanswered pending explanation; do not infer consent to a spending limit.
 - Owner credit totals remain after file cleanup; fixtures are separate from explicitly verified commercial funding. Consistent encrypted financial backups exclude document text and filenames.
 - Keep startup Linguavell, private preparation books and solo-business paperwork separate. Preserve unrelated working files and permanent secrets; do not rewrite source history or publish private examples.
 
