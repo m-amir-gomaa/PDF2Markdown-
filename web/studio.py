@@ -11,13 +11,13 @@ from web.books import BookError
 from web.billing import BillingError
 from web.credits import CreditProvider
 from web.documents import (
-    inspect_pdf,
     parse_pages,
     quote,
     LANGUAGES,
     build_archive,
     page_view,
 )
+from web.inspect_worker import bounded_inspect
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -38,8 +38,9 @@ def create_app(settings, store, storage, dispatcher, provider=None):
         )
 
     async def payload(request):
-        body=await request.json()
-        if not isinstance(body,dict):raise HTTPException(400,'Expected a request object.')
+        body = await request.json()
+        if not isinstance(body, dict):
+            raise HTTPException(400, "Expected a request object.")
         return body
 
     def identity(v):
@@ -89,6 +90,29 @@ def create_app(settings, store, storage, dispatcher, provider=None):
         except BookError as e:
             raise HTTPException(409, str(e)) from None
 
+    def address(request):
+        # Modal's proxy supplies the last hop. IP hashes are rate-limit keys,
+        # not identity verification; global caps remain necessary.
+        value = request.headers.get("x-forwarded-for", "").split(",")[-1].strip() or (
+            request.client.host if request.client else "unknown"
+        )
+        return identity("rate:" + value)
+
+    async def throttle(request, bucket):
+        try:
+            await store(
+                "admit_request", {"bucket": bucket, "identity": address(request)}
+            )
+        except BookError as e:
+            raise HTTPException(429, str(e), headers={"Retry-After": "60"}) from None
+
+    def require_live():
+        if not settings.billing_ready:
+            raise HTTPException(
+                402,
+                "Paid conversion opens after the seller account and processing packs are activated.",
+            )
+
     def idvalue(value):
         try:
             return str(uuid.UUID(value))
@@ -137,7 +161,51 @@ def create_app(settings, store, storage, dispatcher, provider=None):
 
     @app.middleware("http")
     async def headers(request, next):
-        r = await next(request)
+        try:
+            r = await next(request)
+        except Exception:
+            try:
+                await store("event", {"kind": "server_error"})
+            except Exception:
+                print("document_studio error_metric_write_failed")
+            raise
+        path = request.url.path
+        kind = None
+        if request.method == "GET" and (path == "/" or path.startswith("/guides/")):
+            kind = "landing"
+        elif request.method == "POST":
+            kind = {
+                "/api/documents": "inspection",
+                "/api/jobs": "confirmation",
+                "/api/checkout": "checkout",
+                "/api/access": "purchase_restore",
+            }.get(path)
+            if path.endswith("/retry"):
+                kind = "retry"
+        elif request.method == "GET" and path.endswith("/download"):
+            kind = "export"
+        if r.status_code >= 500:
+            kind = "server_error"
+        elif kind and r.status_code >= 400:
+            kind = (
+                "payment_error"
+                if settings.billing_ready
+                and path in ("/api/checkout", "/api/access", "/api/payment-event")
+                else "request_error"
+            )
+        if kind:
+            try:
+                await store(
+                    "event",
+                    {
+                        "kind": kind,
+                        "source": request.query_params.get("utm_source", "direct")
+                        if path == "/"
+                        else "direct",
+                    },
+                )
+            except Exception:
+                print("document_studio metric_write_failed")
         r.headers.update(
             {
                 "X-Content-Type-Options": "nosniff",
@@ -153,6 +221,26 @@ def create_app(settings, store, storage, dispatcher, provider=None):
     async def root():
         return FileResponse(ROOT / "web/templates/index.html", media_type="text/html")
 
+    @app.get("/guides/pdf-to-markdown")
+    async def guide():
+        return FileResponse(
+            ROOT / "web/templates/pdf-to-markdown.html", media_type="text/html"
+        )
+
+    @app.get("/robots.txt")
+    async def robots():
+        return Response(
+            "User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /health\nSitemap: https://m-amir-gomaa--mineru-pdf-extractor-web-app.modal.run/sitemap.xml\n",
+            media_type="text/plain",
+        )
+
+    @app.get("/sitemap.xml")
+    async def sitemap():
+        return Response(
+            '<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>https://m-amir-gomaa--mineru-pdf-extractor-web-app.modal.run/</loc></url><url><loc>https://m-amir-gomaa--mineru-pdf-extractor-web-app.modal.run/guides/pdf-to-markdown</loc></url></urlset>',
+            media_type="application/xml",
+        )
+
     @app.get("/health")
     async def health():
         return {
@@ -164,6 +252,7 @@ def create_app(settings, store, storage, dispatcher, provider=None):
 
     @app.get("/api/session")
     async def get_session(request: Request):
+        await throttle(request, "session")
         try:
             v = session(request)
         except HTTPException:
@@ -229,6 +318,8 @@ def create_app(settings, store, storage, dispatcher, provider=None):
         v = session(request)
         csrf(request, v)
         body = await payload(request)
+        require_live()
+        await throttle(request, "payment")
         try:
             url = await provider.checkout(v["uid"], body.get("pack"))
         except BillingError as e:
@@ -240,6 +331,8 @@ def create_app(settings, store, storage, dispatcher, provider=None):
         v = session(request)
         csrf(request, v)
         body = await payload(request)
+        require_live()
+        await throttle(request, "payment")
         try:
             purchase = await provider.key(body.get("license_key"))
         except BillingError as e:
@@ -250,13 +343,10 @@ def create_app(settings, store, storage, dispatcher, provider=None):
                 "owner": v["uid"],
                 "order_id": purchase["order_id"],
                 "units": purchase["units"],
+                "revoked": purchase["revoked"],
+                "verified": True,
             },
         )
-        if purchase["revoked"]:
-            await call(
-                "reverse",
-                {"order_id": purchase["order_id"], "units": purchase["revoked"]},
-            )
         v = {"uid": owner, "csrf": secrets.token_urlsafe(32)}
         r = JSONResponse({"restored": True})
         cookie(r, v)
@@ -264,6 +354,7 @@ def create_app(settings, store, storage, dispatcher, provider=None):
 
     @app.post("/api/payment-event")
     async def payment_event(request: Request):
+        require_live()
         body = await request.body()
         if len(body) > 65536:
             raise HTTPException(413, "Event too large.")
@@ -271,15 +362,7 @@ def create_app(settings, store, storage, dispatcher, provider=None):
             event = provider.webhook(body, request.headers.get("x-signature", ""))
             if event:
                 purchase = await provider.order(event["order_id"])
-                if purchase["revoked"]:
-                    await call(
-                        "reverse",
-                        {
-                            "order_id": purchase["order_id"],
-                            "units": purchase["revoked"],
-                        },
-                    )
-                elif event["owner"]:
+                if event["owner"]:
                     owner = idvalue(event["owner"])
                     await call(
                         "credit",
@@ -287,6 +370,16 @@ def create_app(settings, store, storage, dispatcher, provider=None):
                             "owner": owner,
                             "order_id": purchase["order_id"],
                             "units": purchase["units"],
+                            "revoked": purchase["revoked"],
+                            "verified": True,
+                        },
+                    )
+                elif purchase["revoked"]:
+                    await call(
+                        "reverse",
+                        {
+                            "order_id": purchase["order_id"],
+                            "units": purchase["revoked"],
                         },
                     )
         except BillingError as e:
@@ -304,6 +397,7 @@ def create_app(settings, store, storage, dispatcher, provider=None):
     ):
         v = session(request)
         csrf(request, v)
+        await throttle(request, "inspect")
         rid = idvalue(request_id)
         if mode not in ("auto", "ocr", "text") or language not in LANGUAGES:
             raise HTTPException(
@@ -320,7 +414,7 @@ def create_app(settings, store, storage, dispatcher, provider=None):
         data = bytes(raw)
         try:
             info = await asyncio.to_thread(
-                inspect_pdf, data, settings.paid_bytes, settings.paid_pages
+                bounded_inspect, data, settings.paid_bytes, settings.paid_pages
             )
             selected = parse_pages(pages, info["total_pages"])
         except ValueError as e:

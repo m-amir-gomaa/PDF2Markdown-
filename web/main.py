@@ -23,16 +23,17 @@ class BodyLimit:
     async def __call__(self,scope,receive,send):
         if scope['type']!='http':return await self.app(scope,receive,send)
         headers=dict(scope.get('headers',[]))
+        limit=self.limit if scope.get('path')=='/api/documents' or scope.get('path')=='/api/jobs' and b'multipart/form-data' in headers.get(b'content-type',b'') else min(self.limit,65536)
         try:
             length=int(headers.get(b'content-length',b'0'))
-        except ValueError:length=self.limit+1
-        if length>self.limit:
+        except ValueError:length=limit+1
+        if length>limit:
             return await JSONResponse({'detail':'Upload exceeds the size limit.'},413)(scope,receive,send)
         total=0
         async def bounded():
             nonlocal total
             event=await receive();total+=len(event.get('body',b''))
-            if total>self.limit:raise HTTPException(413,'Upload exceeds the size limit.')
+            if total>limit:raise HTTPException(413,'Upload exceeds the size limit.')
             return event
         return await self.app(scope,bounded,send)
 

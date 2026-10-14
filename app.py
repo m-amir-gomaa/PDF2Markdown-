@@ -13,14 +13,19 @@ from modal_fn import app, base, result_volume
     ],
     max_containers=2,
     timeout=180,
-    memory=2048,
+    cpu=(0.25, 1),
+    memory=(2048, 2048),
+    scaledown_window=5,
 )
 @modal.concurrent(max_inputs=4)
 @modal.asgi_app()
 def web_app():
+    from threading import Lock
     from web.studio import create_app
     from web.config import Settings
     from modal_fn import book_store, run_book
+
+    storage_lock = Lock()
 
     async def store(operation, arguments):
         return await book_store.remote.aio(operation, arguments)
@@ -68,7 +73,11 @@ def web_app():
                 return
             raise ValueError("Unknown storage operation")
 
-        return await asyncio.to_thread(execute)
+        def serialized():
+            with storage_lock:
+                return execute()
+
+        return await asyncio.to_thread(serialized)
 
     return create_app(Settings.from_env(), store, storage, dispatch)
 

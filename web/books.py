@@ -9,13 +9,14 @@ import time
 import uuid
 from contextlib import closing
 from web.jobs import Ledger
+from web.operations import Operations
 
 
 class BookError(Exception):
     pass
 
 
-class BookLedger(Ledger):
+class BookLedger(Operations, Ledger):
     def __init__(self, path):
         super().__init__(path)
         with self.db() as db:
@@ -33,6 +34,7 @@ class BookLedger(Ledger):
             for name in ("mode", "lang"):
                 if name not in columns:
                     db.execute(f"ALTER TABLE parts ADD COLUMN {name} TEXT")
+            self.setup_operations(db)
 
     def account(self, owner):
         with self.db() as db:
@@ -61,7 +63,9 @@ class BookLedger(Ledger):
 
     def purchase_list(self, owner=None):
         with closing(self.db()) as db:
-            query = "SELECT order_id,owner,granted,revoked FROM purchases"
+            query = (
+                "SELECT order_id,owner,granted,revoked,verified,checked FROM purchases"
+            )
             return [
                 dict(r)
                 for r in db.execute(
@@ -108,24 +112,41 @@ class BookLedger(Ledger):
             ).fetchone()
             return row[0] if row else None
 
-    def credit(self, owner, order_id, units):
+    def credit(self, owner, order_id, units, revoked=0, verified=False):
         if type(units) is not int or not 0 < units <= 1000000:
             raise BookError("Invalid processing pack.")
+        if type(revoked) is not int or not 0 <= revoked <= units:
+            raise BookError("Invalid revoked allowance.")
         with self.db() as db:
             db.execute("BEGIN IMMEDIATE")
             prior = db.execute(
                 "SELECT * FROM purchases WHERE order_id=?", (order_id,)
             ).fetchone()
             if prior:
+                if prior["granted"] != units:
+                    raise BookError("Purchase amount differs from its recorded grant.")
+                self._reverse(db, prior, revoked)
+                if verified:
+                    db.execute(
+                        "UPDATE purchases SET verified=1,checked=? WHERE order_id=?",
+                        (time.time(), order_id),
+                    )
                 return prior["owner"]
             db.execute("INSERT OR IGNORE INTO accounts(owner) VALUES (?)", (owner,))
             db.execute(
-                "INSERT INTO purchases(order_id,owner,granted) VALUES (?,?,?)",
-                (order_id, owner, units),
+                "INSERT INTO purchases(order_id,owner,granted,revoked,verified,checked) VALUES (?,?,?,?,?,?)",
+                (
+                    order_id,
+                    owner,
+                    units,
+                    revoked,
+                    int(verified),
+                    time.time() if verified else 0,
+                ),
             )
             db.execute(
                 "UPDATE accounts SET available=available+? WHERE owner=?",
-                (units, owner),
+                (units - revoked, owner),
             )
             return owner
 
@@ -137,26 +158,32 @@ class BookLedger(Ledger):
             ).fetchone()
             if not r:
                 return False
-            revoked = min(r["granted"], max(r["revoked"], units))
-            delta = revoked - r["revoked"]
-            db.execute(
-                "UPDATE purchases SET revoked=? WHERE order_id=?", (revoked, order_id)
-            )
-            db.execute(
-                "UPDATE accounts SET available=available-? WHERE owner=?",
-                (delta, r["owner"]),
-            )
-            account = db.execute(
-                "SELECT available FROM accounts WHERE owner=?", (r["owner"],)
-            ).fetchone()
-            if account[0] < 0:
-                for job in db.execute(
-                    "SELECT * FROM books WHERE owner=? AND deleted=0 AND cancelled=0",
-                    (r["owner"],),
-                ).fetchall():
-                    self._cancel(db, job)
+            self._reverse(db, r, units)
             # Negative credit after an already-spent refund prevents new work; never hides completed outputs.
             return True
+
+    def _reverse(self, db, purchase, units):
+        if type(units) is not int or units < 0:
+            raise BookError("Invalid refund allowance.")
+        revoked = min(purchase["granted"], max(purchase["revoked"], units))
+        delta = revoked - purchase["revoked"]
+        db.execute(
+            "UPDATE purchases SET revoked=?,checked=? WHERE order_id=?",
+            (revoked, time.time(), purchase["order_id"]),
+        )
+        db.execute(
+            "UPDATE accounts SET available=available-? WHERE owner=?",
+            (delta, purchase["owner"]),
+        )
+        account = db.execute(
+            "SELECT available FROM accounts WHERE owner=?", (purchase["owner"],)
+        ).fetchone()
+        if account[0] < 0:
+            for job in db.execute(
+                "SELECT * FROM books WHERE owner=? AND deleted=0 AND cancelled=0",
+                (purchase["owner"],),
+            ).fetchall():
+                self._cancel(db, job)
 
     def prepare(
         self, owner, request_id, digest, filename, total, pages, mode, lang, retention
@@ -317,6 +344,13 @@ class BookLedger(Ledger):
         start = db.execute(
             "SELECT COALESCE(MAX(number),-1)+1 FROM parts WHERE job=?", (job["id"],)
         ).fetchone()[0]
+        self.admission(
+            db,
+            job["id"],
+            start,
+            (len(pages) + settings.chunk_pages - 1) // settings.chunk_pages,
+            mode,
+        )
         for idx, offset in enumerate(range(0, len(pages), settings.chunk_pages)):
             chosen = pages[offset : offset + settings.chunk_pages]
             db.execute(
@@ -332,6 +366,7 @@ class BookLedger(Ledger):
                     lang,
                 ),
             )
+        self._event(db, "trial_started" if trial else "paid_run_started")
         return units
 
     def confirm(self, owner, document, request_id, trial, ip, settings):
@@ -446,15 +481,26 @@ class BookLedger(Ledger):
                 or job["expires"] <= time.time()
             ):
                 return False
-            return (
+            if db.execute(
+                "SELECT paused FROM operations_control WHERE id=1"
+            ).fetchone()[0]:
+                self._cancel(db, job)
+                return False
+            started = (
                 db.execute(
                     "UPDATE parts SET status='running',deadline=? WHERE job=? AND number=? AND status='queued'",
                     (time.time() + 600, job_id, number),
                 ).rowcount
                 == 1
             )
+            if started:
+                db.execute(
+                    "UPDATE compute_attempts SET started=?,outcome='running' WHERE job=? AND number=?",
+                    (time.time(), job_id, number),
+                )
+            return started
 
-    def part_finish(self, job_id, number, ok, error=None):
+    def part_finish(self, job_id, number, ok, error=None, elapsed=None):
         with self.db() as db:
             db.execute("BEGIN IMMEDIATE")
             job = db.execute("SELECT * FROM books WHERE id=?", (job_id,)).fetchone()
@@ -473,8 +519,8 @@ class BookLedger(Ledger):
                     ).fetchone()
                     charge = part["units"] + (0 if run["fee_paid"] else run["fee"])
                     db.execute(
-                        "UPDATE accounts SET reserved=reserved-? WHERE owner=?",
-                        (charge, job["owner"]),
+                        "UPDATE accounts SET reserved=reserved-?,spent=spent+? WHERE owner=?",
+                        (charge, charge, job["owner"]),
                     )
                     db.execute(
                         "UPDATE runs SET fee_paid=1 WHERE job=? AND revision=?",
@@ -501,6 +547,14 @@ class BookLedger(Ledger):
                 ),
             )
             self._close_run(db, job, part["revision"])
+            if elapsed is not None and (
+                not isinstance(elapsed, (int, float)) or not 0 <= elapsed <= 3600
+            ):
+                raise ValueError("Invalid worker timing")
+            db.execute(
+                "UPDATE compute_attempts SET outcome=?,seconds=? WHERE job=? AND number=?",
+                (status, elapsed, job_id, number),
+            )
             return ok
 
     def book_internal(self, job_id):
@@ -572,6 +626,10 @@ class BookLedger(Ledger):
                 self._release(db, job["owner"], p["units"])
             db.execute(
                 "UPDATE parts SET status='cancelled' WHERE job=? AND number=?",
+                (job["id"], p["number"]),
+            )
+            db.execute(
+                "UPDATE compute_attempts SET outcome='cancelled' WHERE job=? AND number=? AND outcome='admitted'",
                 (job["id"], p["number"]),
             )
         for r in db.execute(
@@ -796,6 +854,11 @@ class BookLedger(Ledger):
 
     def purged(self, jobs, documents):
         with self.db() as db:
+            db.execute("DELETE FROM quotas WHERE expires<?", (time.time(),))
+            db.execute(
+                "DELETE FROM operation_events WHERE day<?",
+                (time.strftime("%Y-%m-%d", time.gmtime(time.time() - 90 * 86400)),),
+            )
             for jid in jobs:
                 for table in ("parts", "runs", "corrections", "correction_history"):
                     db.execute(f"DELETE FROM {table} WHERE job=?", (jid,))

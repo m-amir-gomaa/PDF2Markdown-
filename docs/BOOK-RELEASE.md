@@ -36,9 +36,15 @@ These are launch service tariffs, not exact pass-through of a measured Modal inv
 
 Initial safety limits: 100 retained-document creations/day globally; five retained inspected documents per owner; GPU page attempts 3,000/day globally and 2,000/owner/day, text attempts 30,000/day globally and 5,000/owner/day. Failed attempts still count toward safety limits, despite credit refunds. Trial capped at 3/day and 20/month globally, once per owner/IP. Shared-IP restrictions can affect legitimate users. These caps protect initial owner spending and must be deliberately calibrated for growth; no thousands-of-concurrent-user capacity claim is made.
 
+## Owner operations addition
+
+The private owner report now retrieves actual Modal workspace billing, separates verified commercial funding from fixtures, retains cumulative service consumption across file cleanup and checks credit identities. Atomic admission envelopes default to $10/day and $25/UTC month, at $0.15/GPU or $0.01/text section attempt. These are provisional controls, not a provider invoice cap. Pause blocks new/queued dispatch with an explicit allowance release; running work may complete. Rate quotas, 64 KiB JSON bounds and a separate CPU/memory/time-bounded PDF inspector harden the HTTP path. Read OPERATIONS.md and LAUNCH.md for the outer provider spending limit and actual payment/account/customer evidence.
+
+Existing hourly cleanup adds bounded refund reconciliation, encrypted financial snapshots without document text/filenames, and sanitized rule-based alerts. Off-platform financial backup decryption/integrity/credit identities are checked on a disposable clone, not by overwriting production. No email alert or third-party analytics service was connected. An original public PDF/Markdown/ZIP guide and crawl metadata are available; indexing and sales are not established.
+
 ## Evidence
 
-- Automated suite: 48 unique checks, including real 1,000-page PDF inspection/end-section extraction, timeout/funds lifecycle, actual PDF-bookmark exports, refund cancellation, retry replay and malformed-request tests.
+- Automated suite: 60 unique checks, including real 1,000-page PDF inspection/end-section extraction, timeout/funds lifecycle, actual PDF-bookmark exports, refund cancellation, retry replay and malformed-request tests.
 - Real Modal MinerU: original four-page PDF, selected pages 1/3/4, produced mapped portable output. This was an owner-authenticated internal credit fixture, not a purchase.
 - Real deployed CPU: the complete original 1,000-page synthetic PDF processed across 50 sections via deployed book_store/run_book functions, with fixture credit and no second ledger writer. Final archive has all 1,000 ordered source pages, zero unavailable pages and the correct $1.25 service-credit debit. Four-page source selection was also checked. This is text-layer extraction of a synthetic PDF, not a scanned-book or technical-fidelity benchmark, and not a customer payment.
 - Real public HTTP: inspection of pages 3–4, unfunded confirmation rejected with 409, one-page sample delivered original page 3, edit saved, corrected per-page ZIP downloaded with source PDF omitted, other session denied.

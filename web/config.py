@@ -36,14 +36,18 @@ class Settings:
     text_owner_daily_pages: int = 5000
 
     @property
-    def billing_ready(self):
-        return self.billing_mode == "live" and bool(
+    def payment_configured(self):
+        return bool(
             self.store_id
             and self.variant5
             and self.variant10
             and self.lemon_api_key
             and self.webhook_secret
         )
+
+    @property
+    def billing_ready(self):
+        return self.billing_mode == "live" and self.payment_configured
 
     @classmethod
     def from_env(cls):

@@ -8,6 +8,10 @@
       content="Convert books and technical PDFs into portable Markdown. Select pages, review extraction issues and export files for your own tools."
     />
     <title>Document Studio — PDF to Markdown</title>
+    <link
+      rel="canonical"
+      href="https://m-amir-gomaa--mineru-pdf-extractor-web-app.modal.run/"
+    />
     <link rel="stylesheet" href="/static/style.css" />
     <script defer src="/static/app.js"></script>
   </head>
@@ -32,6 +36,11 @@
           <span>Page selection</span><span>Source-linked review</span
           ><span>Portable files</span>
         </div>
+        <p class="note">
+          <a href="/guides/pdf-to-markdown"
+            >See an original PDF and its Markdown export →</a
+          >
+        </p>
         <div class="steps">
           <h2>A practical workflow</h2>
           <ol>
@@ -110,7 +119,7 @@
               </select></label
             >
           </div>
-          <button id="inspect-button" class="primary" type="submit">
+          <button id="inspect-button" class="primary" type="submit" disabled>
             Inspect PDFs &amp; get prices →
           </button>
         </form>
@@ -136,8 +145,10 @@
           <summary>Processing credits &amp; account recovery</summary>
           <p id="billing-note"></p>
           <div class="actions">
-            <button id="pack5" class="secondary">Add $5 credits</button
-            ><button id="pack10" class="secondary">Add $10 credits</button>
+            <button id="pack5" class="secondary" disabled>Add $5 credits</button
+            ><button id="pack10" class="secondary" disabled>
+              Add $10 credits
+            </button>
           </div>
           <form id="access-form">
             <label
@@ -200,8 +211,8 @@
           <p>
             Credits fund conversion service, are not transferable money and do
             not expire. Failed sections are not charged. Ask for review of
-            unused-credit refunds with your order ID; payment fees may be
-            non-refundable under the final checkout terms.
+            unused-credit refunds with your order ID. Refund conditions will be
+            published before paid sales open; applicable consumer rights apply.
             <a
               href="https://github.com/m-amir-gomaa/PDF2Markdown-/issues"
               target="_blank"
@@ -211,10 +222,21 @@
             without posting private PDFs, purchase or recovery keys.
           </p>
           <p>
+            Paid checkout is not open yet. Final seller and refund details will
+            be shown before paid sales begin.
+          </p>
+          <p>
             Files are not used for model training. Text-only extraction excludes
             images and layout reconstruction. Some tables use HTML and equations
             use LaTeX; raw engine output is also retained. Source-page numbers
             are PDF positions, not printed page labels.
+          </p>
+          <p>
+            We keep aggregate counts of visits, inspections, export requests and
+            payment errors to operate the service; these are not unique-person
+            counts. No advertising trackers are installed. Credit and payment
+            records persist for accounting and recovery. Encrypted financial
+            backups exclude document text and filenames.
           </p>
         </details>
       </section>

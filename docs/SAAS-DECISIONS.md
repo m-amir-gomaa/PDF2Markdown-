@@ -1,21 +1,14 @@
-## Latest implementation override
+# Current Document Studio decisions — 14 October 2026
 
-Amir approved the book/range/review/repair/export features and delegated a better modest-margin pricing model. The selected implementation is one-time $5/$10 consumable processing credits, no recurring access fee, with per-job/per-page service tariffs. The former $1/month proposal is superseded. Read BOOK-RELEASE.md and PAYMENT-ACTIVATION.md. Code and real conversion evidence do not establish activated payments or perfect book fidelity.
+Latest user authorization: finish the PDF-to-Markdown product, launch safeguards, monitoring, payments readiness and first-user preparation; discuss unresolved account/customer evidence explicitly. General fear of failure is not authorization to fabricate sales, account approval or perfect output.
 
-# Document Studio decisions — 14 October 2026
+- Amir's one Modal account hosts extraction; no customer Modal accounts/credentials.
+- Product is a conversion utility for books and technical PDFs, with page selection, source-linked review, corrections/history, partial recovery and portable archives; downstream studying remains in the user's chosen tools.
+- One-time $5/$10 processing packs replace the earlier $1/month access proposal after Amir delegated improved pricing. No recurring access fee is selected.
+- Public free sample is bounded to one selected page; paid work requires a server-confirmed funded quote. Public test-mode grants stay disabled.
+- Actual seller approval, processing-pack acceptance, provider test delivery, live purchase/refund/payout and actual customer margins remain unverified. No live charge is enabled by fixture tests.
+- Owner-only operations use existing Modal authentication, internal admission budgets/pause and private local reports; no extra analytics/monitoring subscription or public admin surface.
+- Owner credit totals remain after file cleanup; fixtures are separate from explicitly verified commercial funding. Consistent encrypted financial backups exclude document text and filenames.
+- Keep startup Linguavell, private preparation books and solo-business paperwork separate. Preserve unrelated working files and permanent secrets; do not rewrite source history or publish private examples.
 
-Latest user instructions supersede earlier drafts:
-
-- Keep Document Studio as a hosted portfolio product with usable MinerU extraction.
-- Amir's Modal account supplies all compute. Customer Modal-account creation and credential collection are discarded.
-- A bounded very small-document trial precedes payment.
-- Amir clarified the product is specifically faithful PDF-to-Markdown conversion for books and technical material, exemplified by the Linguavell preparation books. Do not expand it into a study platform, chatbot, flashcard generator or generic AI workspace. Downstream study/content processing belongs in the user's chosen tools.
-- Customers pay as they go for processing, plus $1/month for access, explicitly confirmed by Amir. This is not the previously assumed $1 subscription with included compute. The user intends the service fee as profit, but the actual contribution is reduced by fees and operating costs.
-- Billing stays disabled until the separately funded processing ledger and a real seller/product are implemented and verified. Fee cadence is resolved; subscription entitlement alone cannot authorize unpaid GPU work.
-- Original product code, source datasets and uncommitted work were backed up/preserved before changes. Current staging contains protected trial, persistent job/quota ledger and source-aware exports. The old subscription verifier remains tested draft code, not the selected commerce implementation.
-
-The current differentiated deliverable is a review-ready PDF-to-notes archive: original source PDF, Markdown/images, PDF-page navigation when upstream metadata supports it, source-map metadata and a report of detectable replacement glyphs/missing images. These flags do not certify linguistic accuracy, OCR fidelity, page correspondence or layout. No claims of unique features or superior extraction without a comparative benchmark.
-
-Confirmed user price objective does not resolve actual profit after processor/payout fees, hosting, support, refunds, acquisition and tax. Payments are not live. No customer charge or ad network was activated. A public preview may run a limited trial only.
-
-Deployment verification: private cloud MinerU conversion succeeded on an original one-page PDF, with readable Markdown and source-page metadata. Initial public startup failed because modal_fn.py was absent from the web image; the file was explicitly included and redeployed. Public /health and /api/session returned HTTP 200, health confirmed billing_enabled=false, and the former /upload route returned 404. A real public HTTP upload subsequently completed and downloaded a 2,295-byte source-aware archive; retrying the same request returned the same job and another session received 404 for status/download. Evidence is kept privately under ignored artifacts/public-verification.json and artifacts/public-verification-result.zip. This original synthetic document does not establish accuracy for academic or medical material, nor browser acceptance. Pricing and discovery hypotheses are separated in PRICING-AND-DISCOVERY.md.
+Read LAUNCH.md first, then OPERATIONS.md, PAYMENT-ACTIVATION.md and PRICING-AND-DISCOVERY.md. BOOK-RELEASE.md records implementation and conversion evidence; THIRD-PARTY.md records the exact upstream release/licensing limits. Historical versions remain in Git/private backups rather than defining current pricing.

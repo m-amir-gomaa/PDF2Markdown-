@@ -2,7 +2,7 @@
 Explicit internal credit fixture; this does not test a customer payment.
 """
 
-import argparse, json, uuid
+import argparse, json, uuid, time
 from pathlib import Path
 import modal
 from web.config import Settings
@@ -68,8 +68,9 @@ def main():
     archive = build_archive(job, data, blobs, [])
     out = Path("artifacts")
     out.mkdir(exist_ok=True)
-    (out / ("cloud-book-" + args.mode + ".zip")).write_bytes(archive)
-    (out / ("cloud-book-" + args.mode + ".json")).write_text(
+    stamp = time.strftime("%Y%m%d-%H%M%S", time.gmtime())
+    (out / ("cloud-book-" + args.mode + "-" + stamp + ".zip")).write_bytes(archive)
+    (out / ("cloud-book-" + args.mode + "-" + stamp + ".json")).write_text(
         json.dumps(
             {
                 "id": job["id"],

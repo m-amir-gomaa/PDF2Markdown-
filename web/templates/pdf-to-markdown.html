@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>
+      PDF to Markdown for books and research — a practical review workflow
+    </title>
+    <meta
+      name="description"
+      content="Compare an original sample PDF with its Markdown export. Learn when text extraction works, when OCR is needed, and how to review source pages before using the result."
+    />
+    <link
+      rel="canonical"
+      href="https://m-amir-gomaa--mineru-pdf-extractor-web-app.modal.run/guides/pdf-to-markdown"
+    />
+    <link rel="stylesheet" href="/static/style.css" />
+  </head>
+  <body>
+    <header>
+      <a href="/" class="brand">Document Studio</a
+      ><a href="/" class="quiet-link">Open the converter →</a>
+    </header>
+    <main class="guide-main">
+      <section class="intro">
+        <p class="eyebrow">A PRACTICAL CONVERSION GUIDE</p>
+        <h1>Keep the source.<br />Take the <span>Markdown.</span></h1>
+        <p class="lead">
+          A PDF conversion is useful when you can follow it back to the
+          original, correct mistakes and move the result into your own tools.
+        </p>
+      </section>
+      <article class="workspace">
+        <h2>Compare an actual export</h2>
+        <p>
+          This original three-page field-notes fixture contains a selectable
+          text layer and real PDF bookmarks. The export below was generated with
+          the app's text-only extractor and archive builder. It is a small
+          functional example, not an OCR or scientific-accuracy benchmark.
+        </p>
+        <div class="actions">
+          <a class="secondary" href="/static/examples/document.pdf"
+            >Original PDF</a
+          ><a class="primary" href="/static/examples/field-notes.zip" download
+            >Markdown archive</a
+          ><a class="text-button" href="/static/examples/field-notes.md"
+            >Read the Markdown</a
+          >
+        </div>
+        <h2>Choose the cheapest method that fits the PDF</h2>
+        <p>
+          If text can be selected and copied correctly, text-layer extraction
+          may suffice. It excludes image extraction and layout reconstruction.
+          If the PDF is scanned, or its embedded text is damaged, use automatic
+          extraction or force OCR. A selectable text layer can still contain
+          incorrect characters.
+        </p>
+        <h2>Convert the pages you actually need</h2>
+        <p>
+          Select PDF positions such as <code>2-3</code> before processing. Those
+          positions may differ from printed page labels. The app inspects page
+          count and text-layer samples before displaying a price; inspection
+          does not run MinerU. A paid job requires separately funded credits and
+          explicit quote confirmation.
+        </p>
+        <h2>Review difficult content against the original</h2>
+        <p>
+          Check numbers, units, negations, Greek symbols, IPA, equations, tables
+          and captions. Replacement-glyph or missing-image reports identify some
+          symptoms; an unflagged page can still be wrong. Open the original PDF
+          page beside the Markdown editor and save corrections. Reprocessing
+          keeps saved edits, so load extracted text explicitly if you intend to
+          replace a correction.
+        </p>
+        <h2>Bring it into Obsidian, an editor or your LLM workflow</h2>
+        <p>
+          Extract the ZIP into a folder. Keep relative image directories with
+          the Markdown. Import or open that folder in your preferred editor; no
+          special plugin is required. Check source-page links in your tool, and
+          choose to include the original PDF in the export when local
+          verification matters. PDF-bookmark exports follow actual source
+          bookmarks rather than inventing chapters.
+        </p>
+        <h2>Prices and practical limits</h2>
+        <p>
+          No recurring access fee is planned. MinerU processing is quoted at
+          $0.50 per job plus $0.005 per selected page; text-only is $0.25 plus
+          $0.001 per page. One-time $5/$10 processing packs are prepared, but
+          paid checkout is not activated. Taxes may be added at checkout. A
+          small one-page sample is available within a global trial allowance.
+        </p>
+        <p>
+          Each source may contain up to 1,000 PDF pages and be up to 64 MiB.
+          Inspected sources, outputs and saved edits expire after 48 hours;
+          download your work promptly. Conversion can fail or need manual
+          correction. Use documents you are authorized to upload.
+        </p>
+        <h2>When this tool is a sensible fit</h2>
+        <p>
+          Try it if you need a portable, reviewable book or paper conversion and
+          prefer to use your own tools afterwards. A normal PDF reader may be
+          enough if you only need to read. Existing converters also offer
+          Markdown; choose using your actual documents, correction time and
+          total price rather than feature claims.
+        </p>
+        <p>
+          <a href="/?utm_source=research" class="primary">Inspect your PDF →</a>
+        </p>
+      </article>
+    </main>
+    <footer>
+      <a href="https://github.com/m-amir-gomaa/PDF2Markdown-"
+        >Implementation and limitations</a
+      ><span>Original sample; no private books used</span>
+    </footer>
+  </body>
+</html>

@@ -2,6 +2,7 @@
 const $ = (id) => document.getElementById(id),
   money = (units) => `$${(units / 10000).toFixed(3).replace(/0$/, "")}`;
 let csrf = "",
+  sessionReady = null,
   config = null,
   documentQuote = null,
   uploadId = null,
@@ -17,6 +18,11 @@ function status(message, error = false) {
   $("status").classList.toggle("error", error);
 }
 async function api(path, options = {}) {
+  if (path !== "/api/session" && !csrf) {
+    if (sessionReady) await sessionReady;
+    if (!csrf)
+      throw Error("The session is still connecting. Refresh and try again.");
+  }
   const r = await fetch(path, {
     credentials: "same-origin",
     ...options,
@@ -55,6 +61,7 @@ async function busy(button, action) {
 async function refresh() {
   config = await api("/api/session");
   csrf = config.csrf;
+  $("inspect-button").disabled = false;
   $("balance").textContent =
     `${money(config.account.available)} available · ${money(config.account.reserved)} reserved`;
   $("billing-note").textContent = config.billing_enabled
@@ -455,7 +462,8 @@ window.addEventListener("beforeunload", (e) => {
     e.returnValue = "";
   }
 });
-refresh().catch((e) => status(e.message, true));
+sessionReady = refresh();
+sessionReady.catch((e) => status(e.message, true));
 
 $("discard-button").addEventListener("click", () =>
   busy($("discard-button"), async () => {

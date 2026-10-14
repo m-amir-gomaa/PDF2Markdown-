@@ -36,7 +36,13 @@ mineru_image = (
 
 
 @app.function(
-    image=base, volumes={"/ledger": ledger_volume}, max_containers=1, timeout=60
+    image=base,
+    volumes={"/ledger": ledger_volume},
+    max_containers=1,
+    timeout=60,
+    cpu=(0.125, 0.5),
+    memory=(512, 512),
+    scaledown_window=5,
 )
 def ledger(operation, arguments):
     # Exactly one input at a time; never call the SQLite file from web/GPU containers.
@@ -134,7 +140,13 @@ def purge_expired():
 
 
 @app.function(
-    image=base, volumes={"/ledger": ledger_volume}, max_containers=1, timeout=60
+    image=base,
+    volumes={"/ledger": ledger_volume},
+    max_containers=1,
+    timeout=60,
+    cpu=(0.125, 0.5),
+    memory=(512, 512),
+    scaledown_window=5,
 )
 def book_store(operation, arguments):
     from web.books import BookLedger
@@ -166,6 +178,13 @@ def book_store(operation, arguments):
         "stale",
         "expired",
         "purged",
+        "event",
+        "operations",
+        "control",
+        "actuals",
+        "snapshot",
+        "admit_request",
+        "part_allowed",
     }
     if operation not in allowed:
         raise ValueError("Unknown book-ledger operation")
@@ -206,8 +225,10 @@ def text_section(job_id, number):
 
 
 def _section(job_id, number):
+    import time
     from web.documents import extract_section
 
+    began = time.monotonic()
     if not book_store.remote("part_start", {"job_id": job_id, "number": number}):
         return
     job = book_store.remote("book_internal", {"job_id": job_id})
@@ -224,7 +245,13 @@ def _section(job_id, number):
         target.write_bytes(result)
         result_volume.commit()
         accepted = book_store.remote(
-            "part_finish", {"job_id": job_id, "number": number, "ok": True}
+            "part_finish",
+            {
+                "job_id": job_id,
+                "number": number,
+                "ok": True,
+                "elapsed": time.monotonic() - began,
+            },
         )
         if not accepted:
             target.unlink(missing_ok=True)
@@ -243,6 +270,7 @@ def _section(job_id, number):
                 "job_id": job_id,
                 "number": number,
                 "ok": False,
+                "elapsed": time.monotonic() - began,
                 "error": "This section failed or exceeded its time limit. Its allowance was released; other completed pages remain available.",
             },
         )
@@ -264,19 +292,19 @@ def run_book(job_id):
     if not job or job["deleted"]:
         return
     pending = [p for p in job["parts"] if p["status"] == "queued"]
+
+    def execute(part):
+        if not book_store.remote(
+            "part_allowed", {"job_id": job_id, "number": part["number"]}
+        ):
+            return
+        function = (
+            text_section if (part.get("mode") or job["mode"]) == "text" else gpu_section
+        )
+        return function.remote(job_id, part["number"])
+
     with ThreadPoolExecutor(max_workers=2) as pool:
-        futures = [
-            pool.submit(
-                (
-                    text_section
-                    if (p.get("mode") or job["mode"]) == "text"
-                    else gpu_section
-                ).remote,
-                job_id,
-                p["number"],
-            )
-            for p in pending
-        ]
+        futures = [pool.submit(execute, p) for p in pending]
         for f in futures:
             try:
                 f.result()
@@ -287,11 +315,23 @@ def run_book(job_id):
 @app.function(
     image=base,
     volumes={"/results": result_volume},
+    secrets=[
+        modal.Secret.from_name("document-studio-session"),
+        modal.Secret.from_name("document-studio-payments"),
+    ],
     schedule=modal.Period(hours=1),
-    timeout=120,
+    timeout=300,
+    cpu=(0.125, 0.5),
+    memory=(512, 512),
+    scaledown_window=5,
 )
 def purge_books():
     import shutil
+    import time
+    import asyncio
+    from cryptography.fernet import Fernet
+    from web.config import Settings
+    from web.credits import CreditProvider
 
     book_store.remote("stale", {})
     expired = book_store.remote("expired", {})
@@ -302,3 +342,52 @@ def purge_books():
         (Path("/results/sources") / (did + ".pdf")).unlink(missing_ok=True)
     result_volume.commit()
     book_store.remote("purged", expired)
+    settings = Settings.from_env()
+
+    async def reconcile():
+        provider = CreditProvider(settings)
+        if not settings.billing_ready:
+            return
+        rows = book_store.remote("purchase_list", {})
+        eligible = sorted(
+            (r for r in rows if r["verified"] and r["revoked"] < r["granted"]),
+            key=lambda r: r["checked"],
+        )[:50]
+        for row in eligible:
+            try:
+                purchase = await provider.order(row["order_id"].rsplit(":", 1)[-1])
+                book_store.remote(
+                    "credit",
+                    {
+                        "owner": row["owner"],
+                        "order_id": purchase["order_id"],
+                        "units": purchase["units"],
+                        "revoked": purchase["revoked"],
+                        "verified": True,
+                    },
+                )
+            except Exception:
+                book_store.remote("event", {"kind": "reconcile_error"})
+                print("document_studio refund_reconciliation_failed")
+                break
+
+    asyncio.run(reconcile())
+    # A daily encrypted ledger snapshot, not copies of customer files. Keep 7.
+    backup_root = Path("/results/ledger-backups")
+    backup_root.mkdir(parents=True, exist_ok=True)
+    backup = backup_root / (time.strftime("%Y-%m-%d", time.gmtime()) + ".fernet")
+    if not backup.exists():
+        blob = book_store.remote("snapshot", {})
+        backup.write_bytes(Fernet(settings.session_key.encode()).encrypt(blob))
+        for old in sorted(backup_root.glob("*.fernet"))[:-7]:
+            old.unlink()
+        result_volume.commit()
+    report = book_store.remote("operations", {})
+    print(
+        "document_studio operations",
+        {
+            "pending_sections": report["pending_sections"],
+            "admitted_monthly_units": report["admitted_monthly_units"],
+            "alerts": report["alerts"],
+        },
+    )

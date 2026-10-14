@@ -10,7 +10,7 @@ class CreditProvider:
         self.s, self.transport = settings, transport
 
     def ready(self):
-        if not self.s.billing_ready:
+        if not self.s.payment_configured or self.s.billing_mode not in ("live", "test"):
             raise BillingError(
                 "Paid conversion opens after the seller account and processing packs are activated."
             )
@@ -47,7 +47,8 @@ class CreditProvider:
                 item = a["first_order_item"]
                 units = self.units(item["variant_id"])
                 if (
-                    str(a["store_id"]) != self.s.store_id
+                    str(v["id"]) != str(order_id)
+                    or str(a["store_id"]) != self.s.store_id
                     or a["test_mode"] is not (self.s.billing_mode == "test")
                     or str(item["variant_id"])
                     not in (self.s.variant5, self.s.variant10)

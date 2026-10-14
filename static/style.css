@@ -60,6 +60,16 @@ main {
   grid-template-columns: 1fr 1fr;
   gap: 70px;
 }
+.guide-main {
+  display: block;
+  max-width: 980px;
+}
+.guide-main .intro {
+  margin-bottom: 36px;
+}
+.guide-main .workspace h2:not(:first-child) {
+  margin-top: 30px;
+}
 .eyebrow {
   font-size: 11px;
   letter-spacing: 0.14em;

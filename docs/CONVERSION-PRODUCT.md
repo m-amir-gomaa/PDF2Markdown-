@@ -15,13 +15,13 @@ Strongest initial cohort: repeated book/PDF conversion users who want plain file
 ## Existing verified foundation
 
 - Owner-hosted pinned MinerU 2.7.6 with private CLI worker; no customer Modal credentials.
-- One-page/1 MiB bounded public trial; per-session/IP and global spend limits.
+- One-selected-page bounded public trial after book inspection; per-session/IP quotas and global admission controls. These are not a provider-wide invoice limit.
 - Persistent serialized job/quota ledger, duplicate-request suppression and session-owned downloads.
 - Markdown/images, original PDF, available source block/page metadata and navigation, detectable replacement glyph and missing-image report.
 - Real public synthetic PDF upload → conversion → ZIP download passed. This does not establish book fidelity, rendered Markdown compatibility across editors, medical accuracy or complete coverage for every PDF page.
-- Access pricing is $1/month plus separately funded processing; live billing/credit accounting is not implemented. Old subscription-with-included-compute entitlement remains a disabled draft.
+- Current pricing uses one-time $5/$10 processing packs without recurring access fees; transactional credit accounting is implemented. Actual seller activation and payment delivery remain unverified. The former monthly access model is superseded.
 
-## Candidate improvements in priority order
+## Original design rationale (core now implemented; evidence in BOOK-RELEASE.md)
 
 1. **Book handling:** accept suitably bounded full books; allow selected PDF pages/ranges; split work into bounded sections; join output without losing images or order; preserve original PDF page references. Retries must rerun only failed selected work. The current public trial and disabled 50-page paid draft do not satisfy this requirement.
 2. **Fidelity:** evaluate reading order, headings, paragraphs, hyphenation, footnotes, tables, formulas and specialized Unicode/IPA against rendered source pages. Flag detectable defects separately from unchecked correctness; do not silently guess or paraphrase the source.
