@@ -1,0 +1,11 @@
+.venv*/
+.env*
+!.env.example
+__pycache__/
+*.pyc
+.local/
+*.sqlite*
+*.zip
+sources/
+docs/archive/
+artifacts/

@@ -1,88 +1,59 @@
-import modal
-import os
-import subprocess
-import shutil
-import zipfile
-from io import BytesIO
+"""Owner-only MinerU compute and a serialized persistent ledger."""
 from pathlib import Path
+import modal
 
-# The cloud container image: Debian + GPU libs + MinerU
-mineru_image = (
-    modal.Image.debian_slim(python_version="3.12")
-    .apt_install("git", "libgl1", "libglib2.0-0", "libsm6", "libxext6", "libxrender-dev")
-    .pip_install("mineru[pipeline]", "accelerate", "transformers", "torch", "torchvision", "six")
-)
+app=modal.App('mineru-pdf-extractor')
+ledger_volume=modal.Volume.from_name('document-studio-ledger-v1',create_if_missing=True)
+result_volume=modal.Volume.from_name('document-studio-results-v1',create_if_missing=True)
+model_volume=modal.Volume.from_name('document-studio-model-cache-v1',create_if_missing=True)
+base=modal.Image.debian_slim(python_version='3.13').pip_install(
+    'fastapi==0.141.1','httpx==0.28.1','cryptography==46.0.5','python-multipart==0.0.32','pypdf==6.14.2'
+).add_local_dir('web','/root/web').add_local_dir('static','/root/static').add_local_file('modal_fn.py','/root/modal_fn.py')
+mineru_image=(modal.Image.debian_slim(python_version='3.12')
+    .apt_install('libgl1','libglib2.0-0','libsm6','libxext6','libxrender-dev')
+    .pip_install('mineru[pipeline]==2.7.6','pypdf==6.14.2')
+    .env({'HF_HOME':'/models/huggingface','MODELSCOPE_CACHE':'/models/modelscope'})
+    .add_local_dir('web','/root/web'))
 
-KEEP_EXTENSIONS = {".md", ".png", ".jpg", ".jpeg", ".webp", ".svg"}
-KEEP_JSON_FILES = {"content_list.json", "content_list_v2.json"}
-DISCARD_NAMES = {"layout.pdf", "span.pdf", "model.json", "layout.json"}
+@app.function(image=base,volumes={'/ledger':ledger_volume},max_containers=1,timeout=60)
+def ledger(operation,arguments):
+    # Exactly one input at a time; never call the SQLite file from web/GPU containers.
+    from web.jobs import Ledger
+    allowed={'reserve','get','list','internal','submitted','start','finish','expire'}
+    if operation not in allowed:raise ValueError('unknown ledger operation')
+    ledger_volume.reload()
+    db=Ledger('/ledger/state.sqlite')
+    value=getattr(db,operation)(**arguments)
+    if operation in {'reserve','submitted','start','finish','expire'}:ledger_volume.commit()
+    return value
 
-def should_keep(rel_path: str) -> bool:
-    p = Path(rel_path)
-    if p.name in DISCARD_NAMES:
-        return False
-    if p.suffix == ".json" and p.name not in KEEP_JSON_FILES:
-        return False
-    if p.suffix == ".pdf":
-        return False
-    return p.suffix in KEEP_EXTENSIONS or p.suffix == ".json"
+@app.function(image=mineru_image,gpu='A10G',cpu=2,memory=8192,timeout=345,max_containers=2,retries=0,
+              volumes={'/results':result_volume,'/models':model_volume})
+def process_job(job_id,data):
+    from web.pipeline import convert_pdf,validate_pdf
+    if not ledger.remote('start',{'job_id':job_id}):return
+    record=ledger.remote('internal',{'job_id':job_id})
+    try:
+        validate_pdf(data,10*1024*1024,1 if record['plan']=='trial' else 50)
+        result=convert_pdf(data,record['seconds'])
+        target=Path('/results')/(job_id+'.zip')
+        target.write_bytes(result);result_volume.commit();model_volume.commit()
+        ledger.remote('finish',{'job_id':job_id,'status':'done'})
+    except Exception:
+        ledger.remote('finish',{'job_id':job_id,'status':'error','error':'Conversion failed or reached its time limit. Contact support before retrying.'})
 
-# We don't define the app here. We expect it to be imported and used by app.py
-# But we need a stub app so we can define the function here, OR we can define
-# the function on a stub app and then include it in the main app.
-# The recommended Modal pattern is to define the app in app.py and import it,
-# OR define the App object here and import it in app.py.
-# Let's define the App object in a central place? 
-# No, Modal handles this nicely. We can just define the Image and the function
-# here by accepting an app object, or creating a stub. Let's just create an app object here
-# and import it in app.py.
+@app.function(image=mineru_image,gpu='A10G',cpu=2,memory=8192,timeout=3600,max_containers=1,retries=0,
+              volumes={'/models':model_volume})
+def extract_pdf(pdf_bytes,base_name):
+    # Compatibility for authenticated owner scripts. Never exposed as a public HTTP route.
+    from web.pipeline import convert_pdf,validate_pdf
+    validate_pdf(pdf_bytes,100*1024*1024,1000)
+    result=convert_pdf(pdf_bytes,3500,max_result=250*1024*1024);model_volume.commit();return result
 
-app = modal.App("mineru-pdf-extractor")
-
-@app.function(image=mineru_image, gpu="A10G", timeout=3600)
-def extract_pdf(pdf_bytes: bytes, base_name: str) -> bytes:
-    """
-    Runs MinerU on the provided PDF bytes inside the Modal GPU container.
-    Filters the output to remove debug artifacts, and returns a zip of the
-    clean output folder (markdown + images + content_list.json).
-    """
-    pdf_path = f"/tmp/{base_name}.pdf"
-    out_dir = f"/tmp/mineru_out_{base_name}"
-
-    with open(pdf_path, "wb") as f:
-        f.write(pdf_bytes)
-
-    os.makedirs(out_dir, exist_ok=True)
-
-    print(f"[modal] Running MinerU on {base_name}.pdf ...")
-    subprocess.run(["mineru", "-p", pdf_path, "-o", out_dir, "-b", "pipeline"], check=True)
-
-    # MinerU writes output into a subdirectory named after the file
-    result_folder = os.path.join(out_dir, base_name)
-    if not os.path.isdir(result_folder):
-        # Fallback: search for any directory inside out_dir
-        subdirs = [d for d in os.listdir(out_dir) if os.path.isdir(os.path.join(out_dir, d))]
-        if subdirs:
-            result_folder = os.path.join(out_dir, subdirs[0])
-        else:
-            raise RuntimeError(f"MinerU produced no output directory in {out_dir}")
-
-    zip_path = f"/tmp/{base_name}_result.zip"
-    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zipf:
-        for root, dirs, files in os.walk(result_folder):
-            for file in files:
-                file_path = os.path.join(root, file)
-                arcname = os.path.relpath(file_path, result_folder)
-                
-                # Filter out garbage
-                if should_keep(arcname):
-                    zipf.write(file_path, arcname)
-
-    with open(zip_path, "rb") as f:
-        zip_bytes = f.read()
-
-    os.remove(pdf_path)
-    os.remove(zip_path)
-    shutil.rmtree(out_dir)
-
-    return zip_bytes
+@app.function(image=base,volumes={'/results':result_volume},schedule=modal.Period(hours=1),timeout=60)
+def purge_expired():
+    # Privacy cleanup is a small scheduled usage cost, disclosed in the operating plan.
+    expired=ledger.remote('expire',{})
+    result_volume.reload()
+    for job_id in expired:(Path('/results')/(job_id+'.zip')).unlink(missing_ok=True)
+    if expired:result_volume.commit()

@@ -1,135 +1,168 @@
+"""Document Studio: paid access and a bounded trial on the owner's Modal account."""
 import asyncio
+import hashlib
+import hmac
+import json
+from pathlib import Path
+import secrets
+import time
 import uuid
-import os
-from fastapi import FastAPI, UploadFile, File, Form, Request, HTTPException
-from fastapi.responses import HTMLResponse, StreamingResponse, Response
+from cryptography.fernet import Fernet, InvalidToken
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
+from web.billing import BillingError, LemonVerifier
+from web.config import Settings
+from web.jobs import LimitError
+from web.pipeline import validate_pdf
 
-from web.jobs import jobs, JobState
-from web.pipeline import run_pipeline
+ROOT=Path(__file__).resolve().parents[1]
 
-app = FastAPI(title="PDF2Markdown")
+class BodyLimit:
+    def __init__(self,app,limit):self.app,self.limit=app,limit
+    async def __call__(self,scope,receive,send):
+        if scope['type']!='http':return await self.app(scope,receive,send)
+        headers=dict(scope.get('headers',[]))
+        try:
+            length=int(headers.get(b'content-length',b'0'))
+        except ValueError:length=self.limit+1
+        if length>self.limit:
+            return await JSONResponse({'detail':'Upload exceeds the size limit.'},413)(scope,receive,send)
+        total=0
+        async def bounded():
+            nonlocal total
+            event=await receive();total+=len(event.get('body',b''))
+            if total>self.limit:raise HTTPException(413,'Upload exceeds the size limit.')
+            return event
+        return await self.app(scope,bounded,send)
 
-# Mount static files
-app.mount("/static", StaticFiles(directory="static"), name="static")
-templates = Jinja2Templates(directory="web/templates")
 
-@app.get("/", response_class=HTMLResponse)
-async def index(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request})
+def create_app(settings,store,dispatcher,read_result,verifier=None):
+    cipher=Fernet(settings.session_key.encode());verifier=verifier or LemonVerifier(settings)
+    app=FastAPI(title='Document Studio',docs_url=None,redoc_url=None,openapi_url=None)
+    app.add_middleware(BodyLimit,limit=settings.paid_bytes+65536)
+    app.mount('/static',StaticFiles(directory=ROOT/'static'),name='static')
 
-@app.post("/upload")
-async def upload_pdf(
-    file: UploadFile = File(...),
-    token_id: str = Form(""),
-    token_secret: str = Form("")
-):
-    if not file.filename.endswith('.pdf'):
-        raise HTTPException(status_code=400, detail="Only PDF files are supported.")
-        
-    pdf_bytes = await file.read()
-    
-    # Create job
-    job_id = str(uuid.uuid4())
-    base_name = os.path.splitext(file.filename)[0].replace(" ", "_")
-    
-    job = JobState(job_id=job_id, filename=base_name)
-    jobs[job_id] = job
-    
-    # Start pipeline in background
-    asyncio.create_task(run_pipeline(job_id, pdf_bytes, base_name, token_id, token_secret))
-    
-    # Return HTML fragment for HTMX to swap into the UI
-    return HTMLResponse(f"""
-    <div id="job-container" class="fade-in mt-6 p-6 bg-slate-800 rounded-lg shadow-xl border border-slate-700">
-        <h3 class="text-xl font-semibold mb-4 text-blue-400">Processing: {file.filename}</h3>
-        
-        <div id="log-container" class="bg-slate-900 rounded p-4 h-64 overflow-y-auto font-mono text-sm text-slate-300 mb-4" 
-             hx-ext="sse" 
-             sse-connect="/stream/{job_id}" 
-             sse-swap="message" 
-             hx-swap="beforeend">
-             <!-- Logs will stream here -->
-        </div>
-        
-        <div id="download-container-{job_id}">
-            <div class="flex items-center space-x-3 text-slate-400">
-                <svg class="animate-spin h-5 w-5 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                <span>Extracting on Modal GPU...</span>
-            </div>
-        </div>
-    </div>
-    """)
+    def identity(value):
+        return hmac.new(settings.session_key.encode(),value.encode(),hashlib.sha256).hexdigest()
 
-@app.get("/stream/{job_id}")
-async def stream_logs(job_id: str, request: Request):
-    if job_id not in jobs:
-        raise HTTPException(status_code=404, detail="Job not found")
-        
-    job = jobs[job_id]
-    
-    async def event_generator():
-        last_index = 0
-        while True:
-            if await request.is_disconnected():
-                break
-                
-            # Yield any new messages
-            while last_index < len(job.progress_messages):
-                msg = job.progress_messages[last_index]
-                yield f"data: <div>{msg}</div>\n\n"
-                last_index += 1
-                
-            if job.status in ["done", "error"]:
-                # Job finished, send final state and stop streaming
-                if job.status == "done":
-                    # Send HTMX out-of-band swap for the download button
-                    yield f"""data: 
-<div hx-swap-oob="innerHTML:#download-container-{job_id}">
-    <a href="/download/{job_id}" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 focus:ring-offset-slate-800 transition-colors">
-        <svg class="-ml-1 mr-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-        </svg>
-        Download Markdown & Images
-    </a>
-</div>\n\n"""
-                elif job.status == "error":
-                    yield f"""data: 
-<div hx-swap-oob="innerHTML:#download-container-{job_id}">
-    <div class="text-red-500 flex items-center space-x-2">
-        <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
-        </svg>
-        <span>Extraction failed. Check logs above.</span>
-    </div>
-</div>\n\n"""
-                break
-                
-            # Wait for next event
+    def session(request):
+        try:
+            value=json.loads(cipher.decrypt(request.cookies.get('studio_session','').encode(),ttl=7*86400))
+            if not isinstance(value.get('uid'),str) or not isinstance(value.get('csrf'),str):raise ValueError()
+            return value
+        except (InvalidToken,ValueError,KeyError,TypeError):
+            raise HTTPException(401,'Refresh the page to start a secure session.') from None
+
+    def csrf(request,value):
+        origin=request.headers.get('origin')
+        if (origin and origin!=str(request.base_url).rstrip('/')) or not hmac.compare_digest(
+                request.headers.get('x-csrf-token',''),value['csrf']):
+            raise HTTPException(403,'Refresh the page and try again.')
+
+    def cookie(response,value):
+        response.set_cookie('studio_session',cipher.encrypt(json.dumps(value).encode()).decode(),
+                            secure=True,httponly=True,samesite='lax',max_age=7*86400,path='/')
+
+    @app.middleware('http')
+    async def headers(request,call_next):
+        response=await call_next(request)
+        response.headers.update({'X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer',
+            'Cache-Control':'no-store','Permissions-Policy':'camera=(), microphone=(), geolocation=()',
+            'Content-Security-Policy':"default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'self' https://m-amir-gomaa.github.io; base-uri 'none'; form-action 'self'"})
+        return response
+
+    @app.get('/')
+    async def index():return FileResponse(ROOT/'web/templates/index.html',media_type='text/html')
+
+    @app.get('/health')
+    async def health():return {'service':'document-studio','status':'ok','billing_enabled':settings.billing_ready}
+
+    @app.get('/api/session')
+    async def get_session(request:Request):
+        try:value=session(request)
+        except HTTPException:value={'uid':str(uuid.uuid4()),'csrf':secrets.token_urlsafe(32)}
+        response=JSONResponse({'csrf':value['csrf'],'paid_session':bool(value.get('license')),
+            'billing_enabled':settings.billing_ready,'checkout_url':settings.checkout_url if settings.billing_ready else None,
+            'price_usd':1,'paid_jobs':settings.paid_jobs,'paid_pages':settings.paid_pages,
+            'trial_pages':settings.trial_pages,'retention_hours':settings.retention_seconds//3600})
+        cookie(response,value);return response
+
+    @app.post('/api/access')
+    async def access(request:Request):
+        value=session(request);csrf(request,value)
+        try:
+            body=await request.json();key=body.get('license_key')
+            grant=await verifier.verify(key)
+        except BillingError as exc:raise HTTPException(402,str(exc)) from None
+        except (ValueError,AttributeError):raise HTTPException(400,'Enter a valid purchase key.') from None
+        value={'uid':identity('license:'+grant['license_id']),'csrf':secrets.token_urlsafe(32),'license':key}
+        response=JSONResponse({'connected':True,'csrf':value['csrf']});cookie(response,value);return response
+
+    @app.post('/api/logout')
+    async def logout(request:Request):
+        value=session(request);csrf(request,value)
+        response=JSONResponse({'signed_out':True});response.delete_cookie('studio_session',path='/');return response
+
+    @app.post('/api/jobs')
+    async def upload(request:Request,file:UploadFile=File(...),request_id:str=Form(...)):
+        value=session(request);csrf(request,value)
+        try:request_id=str(uuid.UUID(request_id))
+        except ValueError:raise HTTPException(400,'Invalid conversion request.') from None
+        plan,cycle='trial','trial'
+        if value.get('license'):
+            try:grant=await verifier.verify(value['license'])
+            except BillingError as exc:raise HTTPException(402,str(exc)) from None
+            plan,cycle='paid',grant['period']
+        max_bytes=settings.paid_bytes if plan=='paid' else settings.trial_bytes
+        max_pages=settings.paid_pages if plan=='paid' else settings.trial_pages
+        raw=bytearray()
+        try:
+            while part:=await file.read(1024*1024):
+                raw.extend(part)
+                if len(raw)>max_bytes:raise HTTPException(413,'This PDF exceeds your upload-size allowance.')
+        finally:await file.close()
+        data=bytes(raw)
+        try:pages=await asyncio.to_thread(validate_pdf,data,max_bytes,max_pages)
+        except ValueError as exc:raise HTTPException(400,str(exc)) from None
+        filename=(file.filename or 'document.pdf').replace('\\','/').rsplit('/',1)[-1][:150]
+        filename=''.join(c for c in filename if ord(c)>=32)
+        # The platform edge supplies this address; global limits remain the hard anti-abuse cap.
+        ip=request.headers.get('x-forwarded-for','').split(',')[-1].strip() or (request.client.host if request.client else 'unknown')
+        args=dict(owner=value['uid'],request_id=request_id,digest=hashlib.sha256(data).hexdigest(),filename=filename,
+                  pages=pages,plan=plan,cycle=cycle,seconds=settings.paid_seconds if plan=='paid' else settings.trial_seconds,
+                  limits={'paid_jobs':settings.paid_jobs,'trial_monthly_global':settings.trial_monthly_global,
+                          'trial_daily_global':settings.trial_daily_global},retention=settings.retention_seconds,
+                  ip_owner=identity('ip:'+ip))
+        try:job=await store('reserve',args)
+        except LimitError as exc:raise HTTPException(429,str(exc)) from None
+        if job.pop('_new',False):
             try:
-                await asyncio.wait_for(job.wait_for_new_event().wait(), timeout=1.0)
-            except asyncio.TimeoutError:
-                # Keep-alive
-                yield ":\n\n"
-                
-    return StreamingResponse(event_generator(), media_type="text/event-stream")
+                call_id=await dispatcher(job['id'],data)
+                await store('submitted',{'job_id':job['id'],'call_id':call_id})
+            except Exception:
+                # Indeterminate submission must never automatically submit another billed job.
+                return JSONResponse({'id':job['id'],'status':'submission_uncertain','detail':'Check this conversion again before starting another.'},202)
+        return {'id':job['id'],'status':job['status']}
 
-@app.get("/download/{job_id}")
-async def download_result(job_id: str):
-    if job_id not in jobs:
-        raise HTTPException(status_code=404, detail="Job not found")
-        
-    job = jobs[job_id]
-    
-    if job.status != "done" or not job.result_zip:
-        raise HTTPException(status_code=400, detail="Result not ready")
-        
-    return Response(
-        content=job.result_zip,
-        media_type="application/zip",
-        headers={"Content-Disposition": f"attachment; filename={job.filename}_markdown.zip"}
-    )
+    @app.get('/api/jobs')
+    async def list_jobs(request:Request):
+        value=session(request);rows=await store('list',{'owner':value['uid']})
+        return [{k:r[k] for k in ('id','filename','pages','status','expires','error')} for r in rows]
+
+    @app.get('/api/jobs/{job_id}')
+    async def status(job_id:str,request:Request):
+        row=await store('get',{'owner':session(request)['uid'],'job_id':job_id})
+        if row is None:raise HTTPException(404,'Conversion not found or expired.')
+        return {k:row[k] for k in ('id','filename','pages','status','expires','error')}
+
+    @app.get('/api/jobs/{job_id}/download')
+    async def download(job_id:str,request:Request):
+        row=await store('get',{'owner':session(request)['uid'],'job_id':job_id})
+        if row is None:raise HTTPException(404,'Conversion not found or expired.')
+        if row['status']!='done':raise HTTPException(409,'The archive is not ready.')
+        try:result=await read_result(job_id)
+        except Exception:raise HTTPException(503,'Download temporarily unavailable. Try again.') from None
+        return Response(result,media_type='application/zip',headers={'Content-Disposition':f'attachment; filename="document-studio-{job_id}.zip"'})
+
+    return app

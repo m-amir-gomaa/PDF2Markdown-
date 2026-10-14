@@ -1,0 +1,5 @@
+# Third-party source notes
+
+Verified 14 October 2026. The extraction worker installs the official PyPI release `mineru[pipeline]==2.7.6` and invokes its CLI without patching it. Official source release: [mineru-2.7.6-released](https://github.com/opendatalab/MinerU/tree/mineru-2.7.6-released), commit `e31c0ec34da89f6d7db78866ffec13eb0aaa3a3c`. That release's [LICENSE.md](https://github.com/opendatalab/MinerU/blob/e31c0ec34da89f6d7db78866ffec13eb0aaa3a3c/LICENSE.md) is GNU Affero General Public License version 3. Current master licensing must not be substituted for the pinned release's terms.
+
+MinerU attribution and the exact upstream source link are visible in the UI and README. Document Studio's application source is published in its existing public repository. This note does not relicense the owner's wrapper or certify that subprocess separation resolves every license boundary. Any engine/model changes need their own exact-release source and license review. A complete transitive dependency/model license inventory has not been produced; package version pinning alone does not establish it.
