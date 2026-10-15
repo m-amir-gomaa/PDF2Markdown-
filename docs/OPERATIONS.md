@@ -1,6 +1,6 @@
 # Owner operations — 14 October 2026
 
-Run from the Document Studio repository with the existing authenticated Modal profile. There is no publicly accessible admin endpoint or new monitoring subscription.
+Run from the Pageweft repository with the existing authenticated Modal profile. There is no publicly accessible admin endpoint or new monitoring subscription.
 
 ```sh
 .venv/bin/python -m scripts.operations report

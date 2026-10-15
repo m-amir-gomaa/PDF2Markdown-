@@ -1,4 +1,4 @@
-name: Document Studio checks
+name: Pageweft checks
 
 on:
   push:

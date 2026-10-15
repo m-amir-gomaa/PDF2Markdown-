@@ -1,4 +1,4 @@
-# Document Studio
+# Pageweft
 
 Read ../AGENTS.md and docs/SAAS-DECISIONS.md. Active freelance project as of 14 October 2026. Latest user decision supersedes BYO Modal and bundled subscription pricing: Amir's account hosts all compute, with a bounded small-document trial, one-time prepaid conversion credits without recurring access fees, selected after Amir delegated pricing improvements. Read docs/BOOK-RELEASE.md and docs/PAYMENT-ACTIVATION.md for current implementation and live activation limits. No customer Modal credentials are collected. Billing activation requires the metered-processing ledger and approved real seller/product configuration; mocks cannot activate paid access. Preserve previous changes/archives and private source books. Never commit credentials, source PDFs, extracted books or local environments. A successful conversion does not establish perfect OCR/IPA/layout fidelity.
 

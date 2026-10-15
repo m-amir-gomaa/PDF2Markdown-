@@ -1,6 +1,6 @@
 # Book conversion release — 14 October 2026
 
-Implemented in the hosted Document Studio application; supersedes the one-page-only product and $1/month access proposal. Amir delegated a better pricing model and approved the conversion utility improvements. The public free sample remains one selected page, but inspection accepts books and paid jobs use separately funded credits.
+Implemented in the hosted Pageweft application; supersedes the one-page-only product and $1/month access proposal. Amir delegated a better pricing model and approved the conversion utility improvements. The public free sample remains one selected page, but inspection accepts books and paid jobs use separately funded credits.
 
 ## Features and implementation
 

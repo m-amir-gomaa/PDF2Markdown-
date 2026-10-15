@@ -2,7 +2,7 @@
 
 The approved core features are now implemented: full-book/range inspection (bounded at 64 MiB/1,000 pages), batch inspection, quotes, bounded section processing, selective retries/force OCR, source-linked review, corrections/history, portable outputs and prepaid-credit accounting. Read BOOK-RELEASE.md for tested evidence and limits. Earlier candidate language below describes the design rationale. Actual merchant activation and comparative difficult-document fidelity remain unverified; these features do not certify every source symbol.
 
-# Document Studio: conversion utility
+# Pageweft: conversion utility
 
 User clarification, 14 October 2026: PDF-to-Markdown for serious work with books, including Linguavell preparation. Users control the downstream reading/LLM workflow. No study platform, AI chat, automatically generated teaching materials or decorative feature expansion.
 

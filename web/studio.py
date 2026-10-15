@@ -26,7 +26,7 @@ def create_app(settings, store, storage, dispatcher, provider=None):
     provider = provider or CreditProvider(settings)
     cipher = Fernet(settings.session_key.encode())
     app = FastAPI(
-        title="Document Studio", docs_url=None, redoc_url=None, openapi_url=None
+        title="Pageweft", docs_url=None, redoc_url=None, openapi_url=None
     )
     app.add_middleware(BodyLimit, limit=settings.paid_bytes + 65536)
     app.mount("/static", StaticFiles(directory=ROOT / "static"), name="static")
@@ -708,7 +708,7 @@ def create_app(settings, store, storage, dispatcher, provider=None):
             archive,
             media_type="application/zip",
             headers={
-                "Content-Disposition": f'attachment; filename="document-studio-{job["id"]}.zip"'
+                "Content-Disposition": f'attachment; filename="pageweft-{job["id"]}.zip"'
             },
         )
 

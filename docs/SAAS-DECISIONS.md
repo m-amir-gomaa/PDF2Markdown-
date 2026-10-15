@@ -1,7 +1,8 @@
-# Current Document Studio decisions — 14 October 2026
+# Current Pageweft decisions — 15 October 2026
 
 Latest user authorization: finish the PDF-to-Markdown product, launch safeguards, monitoring, payments readiness and first-user preparation; discuss unresolved account/customer evidence explicitly. General fear of failure is not authorization to fabricate sales, account approval or perfect output.
 
+- On 15 October 2026 Amir approved **Pageweft — PDF to Markdown** as the product name, replacing Document Studio. Canonical local directory: `freelance/pageweft`; `freelance/document-studio` remains a compatibility symlink. Existing GitHub/Modal URLs, app/volume/secret identifiers, session key/environment name and stored ledger identities remain stable; no accounts or data are migrated by branding.
 - Amir's one Modal account hosts extraction; no customer Modal accounts/credentials.
 - Product is a conversion utility for books and technical PDFs, with page selection, source-linked review, corrections/history, partial recovery and portable archives; downstream studying remains in the user's chosen tools.
 - One-time $5/$10 processing packs replace the earlier $1/month access proposal after Amir delegated improved pricing. No recurring access fee is selected.

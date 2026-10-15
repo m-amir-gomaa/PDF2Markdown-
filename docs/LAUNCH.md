@@ -1,6 +1,6 @@
 # Launch register — read this first
 
-Updated 14 October 2026. Document Studio is a working, bounded PDF-to-Markdown utility. Commercial demand, representative extraction quality and real payment delivery remain separate evidence. Initial spending and feature scope should stay small until those are measured.
+Updated 14 October 2026. Pageweft is a working, bounded PDF-to-Markdown utility. Commercial demand, representative extraction quality and real payment delivery remain separate evidence. Initial spending and feature scope should stay small until those are measured.
 
 | Milestone | Current evidence | Remaining action / completion evidence |
 |---|---|---|

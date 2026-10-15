@@ -1,4 +1,4 @@
-"""Document Studio: paid access and a bounded trial on the owner's Modal account."""
+"""Pageweft: paid access and a bounded trial on the owner's Modal account."""
 import asyncio
 import hashlib
 import hmac
@@ -40,7 +40,7 @@ class BodyLimit:
 
 def create_app(settings,store,dispatcher,read_result,verifier=None):
     cipher=Fernet(settings.session_key.encode());verifier=verifier or LemonVerifier(settings)
-    app=FastAPI(title='Document Studio',docs_url=None,redoc_url=None,openapi_url=None)
+    app=FastAPI(title='Pageweft',docs_url=None,redoc_url=None,openapi_url=None)
     app.add_middleware(BodyLimit,limit=settings.paid_bytes+65536)
     app.mount('/static',StaticFiles(directory=ROOT/'static'),name='static')
 
@@ -164,6 +164,6 @@ def create_app(settings,store,dispatcher,read_result,verifier=None):
         if row['status']!='done':raise HTTPException(409,'The archive is not ready.')
         try:result=await read_result(job_id)
         except Exception:raise HTTPException(503,'Download temporarily unavailable. Try again.') from None
-        return Response(result,media_type='application/zip',headers={'Content-Disposition':f'attachment; filename="document-studio-{job_id}.zip"'})
+        return Response(result,media_type='application/zip',headers={'Content-Disposition':f'attachment; filename="pageweft-{job_id}.zip"'})
 
     return app

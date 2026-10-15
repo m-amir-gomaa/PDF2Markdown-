@@ -1,4 +1,6 @@
-# Document Studio
+# Pageweft — PDF to Markdown
+
+Formerly Document Studio; renamed with Amir's approval on 15 October 2026. Canonical local path: `/home/qwerty/Projects/freelance/pageweft`, with the old directory kept as a compatibility symlink. Existing public GitHub/Modal URLs and permanent storage/session/secret identifiers are retained so bookmarks, accounts and credits keep working.
 
 Hosted PDF-to-Markdown conversion for books and technical material, using MinerU on Amir's Modal account. Inspect selected pages, review issues, correct text and export portable files for your own editor or LLM workflow.
 
