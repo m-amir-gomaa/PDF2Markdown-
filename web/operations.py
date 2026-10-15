@@ -314,6 +314,13 @@ class Operations:
             invalid_balances = db.execute(
                 "SELECT COUNT(*) FROM accounts a WHERE reserved<0 OR spent<0 OR available+reserved+spent!=COALESCE((SELECT SUM(granted-revoked) FROM purchases WHERE owner=a.owner),0)"
             ).fetchone()[0]
+            payment_pending = db.execute(
+                "SELECT COUNT(*) FROM payment_events WHERE completed IS NULL"
+            ).fetchone()[0]
+            payment_stale = db.execute(
+                "SELECT COUNT(*) FROM payment_events WHERE completed IS NULL AND created<?",
+                (time.time() - 300,),
+            ).fetchone()[0]
         alerts = []
         if invalid_balances:
             alerts.append(
@@ -321,6 +328,10 @@ class Operations:
             )
         if stale:
             alerts.append("Stale workers need reconciliation.")
+        if payment_stale:
+            alerts.append(
+                "Payment notifications have waited over five minutes; inspect/retry payment reconciliation before accepting more purchases."
+            )
         if negatives:
             alerts.append(
                 "Refunds exceeded remaining credit; affected accounts cannot start new work."
@@ -378,6 +389,8 @@ class Operations:
             "repeat_buyers": repeat_buyers,
             "trial_usage": trial_usage,
             "pending_sections": outstanding,
+            "payment_inbox_pending": payment_pending,
+            "payment_inbox_stale": payment_stale,
             "stale_sections": stale,
             "negative_accounts": negatives,
             "invalid_balances": invalid_balances,

@@ -10,13 +10,14 @@ import uuid
 from contextlib import closing
 from web.jobs import Ledger
 from web.operations import Operations
+from web.payments import PaymentLedger
 
 
 class BookError(Exception):
     pass
 
 
-class BookLedger(Operations, Ledger):
+class BookLedger(PaymentLedger, Operations, Ledger):
     def __init__(self, path):
         super().__init__(path)
         with self.db() as db:
@@ -35,6 +36,7 @@ class BookLedger(Operations, Ledger):
                 if name not in columns:
                     db.execute(f"ALTER TABLE parts ADD COLUMN {name} TEXT")
             self.setup_operations(db)
+            self.setup_payments(db)
 
     def account(self, owner):
         with self.db() as db:

@@ -14,3 +14,7 @@ Latest user authorization: finish the PDF-to-Markdown product, launch safeguards
 - Keep startup Linguavell, private preparation books and solo-business paperwork separate. Preserve unrelated working files and permanent secrets; do not rewrite source history or publish private examples.
 
 Read LAUNCH.md first, then OPERATIONS.md, PAYMENT-ACTIVATION.md and PRICING-AND-DISCOVERY.md. BOOK-RELEASE.md records implementation and conversion evidence; THIRD-PARTY.md records the exact upstream release/licensing limits. Historical versions remain in Git/private backups rather than defining current pricing.
+
+## Paddle selection — 15 October 2026
+
+Amir explicitly selected Paddle for his solo Pageweft SaaS and authorized integrating it through the existing signed-in account. Paddle Billing supersedes the Lemon-specific activation instructions; permanent Modal/session/storage IDs and existing balances stay in place. Catalog ($5/$10 one-time packs), scoped runtime credentials, a paused notification destination and public policy pages are configured. The actual app domain is submitted and pending review. Merchant identity/approval, real sandbox/live delivery and payouts are not verified. Recovery uses a saved Pageweft key, not an invented Paddle license-key API. Read PAYMENT-ACTIVATION.md and PADDLE-20261015.md for exact current evidence and remaining personal steps.

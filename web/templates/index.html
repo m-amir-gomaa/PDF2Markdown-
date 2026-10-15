@@ -144,13 +144,15 @@
         <details class="account">
           <summary>Processing credits &amp; account recovery</summary>
           <p id="billing-note"></p>
+          <p class="note">Before buying, create and save your private recovery key below. It is the way to restore your credits on another device.</p>
+          <label class="purchase-consent"><input id="purchase-consent" type="checkbox" /> I have saved my recovery key and accept the <a href="/terms">terms</a>, <a href="/refunds">refund policy</a> and <a href="/privacy">privacy notice</a>.</label>
           <div class="actions">
             <button id="pack5" class="secondary" disabled>Add $5 credits</button
             ><button id="pack10" class="secondary" disabled>
               Add $10 credits
             </button>
           </div>
-          <form id="access-form">
+          <form id="access-form" hidden>
             <label
               >Purchase key from your receipt<input
                 id="license-key"
@@ -211,8 +213,7 @@
           <p>
             Credits fund conversion service, are not transferable money and do
             not expire. Failed sections are not charged. Ask for review of
-            unused-credit refunds with your order ID. Refund conditions will be
-            published before paid sales open; applicable consumer rights apply.
+            unused-credit refunds with your order ID. Read the <a href="/refunds">refund policy</a>; applicable consumer rights apply.
             <a
               href="mailto:mo.gomaa.formal@gmail.com?subject=Pageweft%20support"
               >Email support</a
@@ -221,8 +222,7 @@
             private PDFs, purchase keys or recovery keys.
           </p>
           <p>
-            Paid checkout is not open yet. Final seller and refund details will
-            be shown before paid sales begin.
+            Paid checkout opens after merchant approval and payment verification. Read the <a href="/terms">service terms</a> and <a href="/privacy">privacy notice</a>.
           </p>
           <p>
             Files are not used for model training. Text-only extraction excludes
@@ -295,6 +295,7 @@
       </section>
     </main>
     <footer>
+      <span><a href="/pricing">Pricing</a> · <a href="/terms">Terms</a> · <a href="/privacy">Privacy</a> · <a href="/refunds">Refunds</a></span>
       <span
         >Extraction powered by
         <a

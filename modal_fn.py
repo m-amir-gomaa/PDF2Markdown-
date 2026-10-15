@@ -155,6 +155,12 @@ def book_store(operation, arguments):
         "account",
         "documents_list",
         "purchase_list",
+        "payment_intent",
+        "payment_lookup",
+        "payment_receipt",
+        "payment_event",
+        "payment_pending",
+        "payment_done",
         "retry_existing",
         "set_recovery",
         "recover",
@@ -331,7 +337,8 @@ def purge_books():
     import asyncio
     from cryptography.fernet import Fernet
     from web.config import Settings
-    from web.credits import CreditProvider
+    from web.paddle import credit_provider
+    from web.payments import process_paddle_events, reconcile_paddle
 
     book_store.remote("stale", {})
     expired = book_store.remote("expired", {})
@@ -345,16 +352,37 @@ def purge_books():
     settings = Settings.from_env()
 
     async def reconcile():
-        provider = CreditProvider(settings)
+        provider = credit_provider(settings)
         if not settings.billing_ready:
             return
+        if settings.billing_provider == "paddle":
+
+            async def store(operation, arguments):
+                return await book_store.remote.aio(operation, arguments)
+
+            await process_paddle_events(provider, store)
         rows = book_store.remote("purchase_list", {})
         eligible = sorted(
-            (r for r in rows if r["verified"] and r["revoked"] < r["granted"]),
+            (
+                r
+                for r in rows
+                if r["verified"]
+                and r["revoked"] < r["granted"]
+                and (
+                    r["order_id"].startswith(provider.prefix)
+                    if settings.billing_provider == "paddle"
+                    else r["order_id"].startswith(settings.store_id + ":")
+                )
+            ),
             key=lambda r: r["checked"],
         )[:50]
         for row in eligible:
             try:
+                if settings.billing_provider == "paddle":
+                    await reconcile_paddle(
+                        provider, store, row["order_id"].rsplit(":", 1)[-1]
+                    )
+                    continue
                 purchase = await provider.order(row["order_id"].rsplit(":", 1)[-1])
                 book_store.remote(
                     "credit",
@@ -391,3 +419,31 @@ def purge_books():
             "alerts": report["alerts"],
         },
     )
+
+
+@app.function(
+    image=base,
+    secrets=[
+        modal.Secret.from_name("document-studio-session"),
+        modal.Secret.from_name("document-studio-payments"),
+    ],
+    max_containers=1,
+    timeout=300,
+    cpu=(0.125, 0.5),
+    memory=(512, 512),
+    scaledown_window=5,
+)
+def process_payment_events():
+    import asyncio
+    from web.config import Settings
+    from web.paddle import credit_provider
+    from web.payments import process_paddle_events
+
+    settings = Settings.from_env()
+    if not settings.billing_ready or settings.billing_provider != "paddle":
+        return 0
+
+    async def store(operation, arguments):
+        return await book_store.remote.aio(operation, arguments)
+
+    return asyncio.run(process_paddle_events(credit_provider(settings), store))

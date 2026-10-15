@@ -64,6 +64,16 @@ main {
   display: block;
   max-width: 980px;
 }
+.purchase-consent {
+  display: block;
+  margin: 16px 0;
+  font-size: 14px;
+}
+.purchase-consent input {
+  display: inline-block;
+  width: auto;
+  margin-right: 8px;
+}
 .guide-main .intro {
   margin-bottom: 36px;
 }

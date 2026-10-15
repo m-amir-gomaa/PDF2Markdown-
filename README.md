@@ -15,11 +15,11 @@ Hosted PDF-to-Markdown conversion for books and technical material, using MinerU
 - Source-page review, symptom reports, corrections with history and stale-edit protection.
 - Single-file, per-page, page-group or PDF-bookmark exports with relative image paths, original engine output, manifests and optional source PDF.
 - Private session ownership, account recovery key, source/output deletion and 48-hour file expiry.
-- Transactional processing-credit reserve/settle/release and one-time pack integration. **Real seller/product configuration and actual payment delivery are not activated or verified.**
+- Transactional processing-credit reserve/settle/release and one-time pack integration. **Paddle catalog, runtime credentials and signed-payment integration are configured; merchant review and real payment delivery remain pending.**
 - Private owner dashboard, actual Modal workspace billing readout, conservative admission budgets/pause, aggregated activity/error counts and encrypted financial snapshots. Actual provider-level spend limits and commercial margins remain separate verification.
 - Original public PDF/Markdown/ZIP example and practical conversion guide, canonical pages and crawl metadata; no search ranking or user acquisition claim.
 
-No recurring access fee. Launch tariff: MinerU $0.50/job + $0.005/selected page; text-only $0.25 + $0.001/page. Prepaid packs planned at $5/$10. Reprocessing completed pages has a $0.20 service fee plus page usage; failed-page retry does not repeat an already charged initial fee. Credits do not expire; files/edits do. This is a service tariff, not exact measured compute pass-through or guaranteed net profit.
+No recurring access fee. Launch tariff: MinerU $0.50/job + $0.005/selected page; text-only $0.25 + $0.001/page. One-time packs are configured at $5/$10; checkout remains closed pending approval and payment verification. Reprocessing completed pages has a $0.20 service fee plus page usage; failed-page retry does not repeat an already charged initial fee. Credits do not expire; files/edits do. This is a service tariff, not exact measured compute pass-through or guaranteed net profit.
 
 ## Architecture
 
@@ -60,7 +60,7 @@ node --check static/app.js
 .venv/bin/python -m modal deploy app.py
 ```
 
-Owner Modal authentication is required. Keep the existing Fernet key in `document-studio-session`; changing it invalidates sessions and key-derived recovery identities. The separate `document-studio-payments` secret currently contains only BILLING_MODE=test. Public test-mode grants are disabled. See [activation steps](docs/PAYMENT-ACTIVATION.md) before live charging.
+Owner Modal authentication is required. Keep the existing Fernet key in `document-studio-session`; changing it invalidates sessions and key-derived recovery identities. The separate `document-studio-payments` secret contains scoped Paddle runtime configuration with BILLING_MODE=test and PADDLE_SELLER_APPROVED=false; merchant review is pending. Public test-mode grants are disabled. See [activation steps](docs/PAYMENT-ACTIVATION.md) before live charging.
 
 For a local browser fixture with real text extraction and explicit synthetic credit, run:
 
@@ -72,7 +72,7 @@ This fixture is not deployed, does not process payments or run local MinerU, and
 
 ## Verification and limits
 
-The current 60-test automated suite, real Modal extraction, live public trial/edit/export and responsive browser evidence are recorded in [BOOK-RELEASE.md](docs/BOOK-RELEASE.md). A complete 1,000-page synthetic PDF passed deployed text-layer extraction across 50 sections with all pages exported and correct credit settlement; this is not a GPU whole-book fidelity benchmark. Provider validation/signature/refund tests use simulated HTTP. Representative difficult-document comparison and real merchant delivery remain distinct work.
+The current 78-test automated suite, real Modal extraction, live public trial/edit/export and responsive browser evidence are recorded in [BOOK-RELEASE.md](docs/BOOK-RELEASE.md). A complete 1,000-page synthetic PDF passed deployed text-layer extraction across 50 sections with all pages exported and correct credit settlement; this is not a GPU whole-book fidelity benchmark. Paddle validation/signature/refund tests use synthetic HTTP and real disposable SQLite. Dedicated checkout, recovery and public policy pages passed local and deployed Chromium checks at 320/390/768/1440 pixels; no real Paddle payment or sandbox purchase was performed. See [Paddle evidence](docs/PADDLE-20261015.md). Representative difficult-document comparison and real merchant delivery remain distinct work.
 
 Results are private through session ownership, not a claim of zero provider retention. Hard-killed workers reconcile through deadlines; uncertain dispatch never automatically spends on a retry. Scheduled cleanup, storage, cache and compute can incur charges. Shared-IP trial limits can affect legitimate users.
 

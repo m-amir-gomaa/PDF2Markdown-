@@ -69,6 +69,7 @@ async function refresh() {
     : "Paid packs open after seller activation. Inspection and the bounded sample are available.";
   for (const id of ["pack5", "pack10"])
     $(id).disabled = !config.billing_enabled;
+  $("access-form").hidden = config.billing_provider === "paddle";
   const lang = $("language"),
     selected = lang.value;
   lang.replaceChildren();
@@ -412,7 +413,7 @@ $("close-review").addEventListener("click", () => {
 for (const n of [5, 10])
   $(`pack${n}`).addEventListener("click", () =>
     busy($(`pack${n}`), async () => {
-      const r = await post("/api/checkout", { pack: n });
+      const r = await post("/api/checkout", { pack: n, terms_accepted: $("purchase-consent").checked });
       location.assign(r.url);
     }),
   );
@@ -431,6 +432,7 @@ $("recovery-button").addEventListener("click", () =>
     const r = await post("/api/recovery", {});
     $("recovery-key").value = r.recovery_key;
     $("recovery-box").hidden = false;
+    await refresh();
     status(r.notice);
     $("recovery-key").select();
   }),

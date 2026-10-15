@@ -9,7 +9,8 @@ from fastapi.staticfiles import StaticFiles
 from web.main import BodyLimit
 from web.books import BookError
 from web.billing import BillingError
-from web.credits import CreditProvider
+from web.paddle import credit_provider, valid_id
+from web.payments import reconcile_paddle, process_paddle_events
 from web.documents import (
     parse_pages,
     quote,
@@ -22,12 +23,12 @@ from web.inspect_worker import bounded_inspect
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def create_app(settings, store, storage, dispatcher, provider=None):
-    provider = provider or CreditProvider(settings)
+def create_app(
+    settings, store, storage, dispatcher, provider=None, payment_dispatcher=None
+):
+    provider = provider or credit_provider(settings)
     cipher = Fernet(settings.session_key.encode())
-    app = FastAPI(
-        title="Pageweft", docs_url=None, redoc_url=None, openapi_url=None
-    )
+    app = FastAPI(title="Pageweft", docs_url=None, redoc_url=None, openapi_url=None)
     app.add_middleware(BodyLimit, limit=settings.paid_bytes + 65536)
     app.mount("/static", StaticFiles(directory=ROOT / "static"), name="static")
 
@@ -215,11 +216,52 @@ def create_app(settings, store, storage, dispatcher, provider=None):
                 "Content-Security-Policy": "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'self' https://m-amir-gomaa.github.io; base-uri 'none'; form-action 'self'; object-src 'none'",
             }
         )
+        if path == "/checkout":
+            # Paddle executes only on this dedicated payment page, never in a
+            # workspace holding private PDFs, corrections or recovery keys.
+            r.headers["Content-Security-Policy"] = (
+                "default-src 'self'; script-src 'self' https://cdn.paddle.com; "
+                "style-src 'self'; img-src 'self' data:; connect-src 'self' https://*.paddle.com; "
+                "frame-src https://*.paddle.com; frame-ancestors 'none'; "
+                "base-uri 'none'; form-action 'self'; object-src 'none'"
+            )
         return r
 
     @app.get("/")
     async def root():
         return FileResponse(ROOT / "web/templates/index.html", media_type="text/html")
+
+    @app.get("/checkout")
+    async def checkout_page():
+        return FileResponse(
+            ROOT / "web/templates/checkout.html", media_type="text/html"
+        )
+
+    @app.get("/pricing")
+    async def pricing_page():
+        return FileResponse(ROOT / "web/templates/pricing.html", media_type="text/html")
+
+    @app.get("/api/checkout-config")
+    async def checkout_config():
+        # Public token is deliberately distinct from the server API credential.
+        if settings.billing_provider != "paddle":
+            raise HTTPException(404)
+        return {
+            "enabled": settings.billing_ready,
+            "client_token": settings.paddle_client_token
+            if settings.billing_ready
+            else "",
+            "environment": settings.paddle_environment,
+        }
+
+    @app.get("/terms")
+    @app.get("/privacy")
+    @app.get("/refunds")
+    async def policy_page(request: Request):
+        policy = request.url.path.removeprefix("/")
+        return FileResponse(
+            ROOT / f"web/templates/{policy}.html", media_type="text/html"
+        )
 
     @app.get("/guides/pdf-to-markdown")
     async def guide():
@@ -263,6 +305,7 @@ def create_app(settings, store, storage, dispatcher, provider=None):
                 "csrf": v["csrf"],
                 "account": account,
                 "billing_enabled": settings.billing_ready,
+                "billing_provider": settings.billing_provider,
                 "max_bytes": settings.paid_bytes,
                 "max_pages": settings.paid_pages,
                 "retention_hours": settings.retention_seconds // 3600,
@@ -321,6 +364,28 @@ def create_app(settings, store, storage, dispatcher, provider=None):
         require_live()
         await throttle(request, "payment")
         try:
+            if settings.billing_provider == "paddle":
+                if body.get("terms_accepted") is not True:
+                    raise HTTPException(
+                        400,
+                        "Read and accept the terms, privacy notice and refund policy before checkout.",
+                    )
+                account = await call("account", {"owner": v["uid"]})
+                if not account["has_recovery"]:
+                    raise HTTPException(
+                        409,
+                        "Create and save your private recovery key before buying credits.",
+                    )
+                checkout = await provider.checkout(v["uid"], body.get("pack"))
+                await call(
+                    "payment_intent",
+                    {
+                        "transaction_id": checkout["transaction_id"],
+                        "owner": v["uid"],
+                        "units": checkout["units"],
+                    },
+                )
+                return {"url": checkout["url"]}
             url = await provider.checkout(v["uid"], body.get("pack"))
         except BillingError as e:
             raise HTTPException(402, str(e)) from None
@@ -328,6 +393,10 @@ def create_app(settings, store, storage, dispatcher, provider=None):
 
     @app.post("/api/access")
     async def access(request: Request):
+        if settings.billing_provider == "paddle":
+            raise HTTPException(
+                404, "Use your Pageweft recovery key to restore this workspace."
+            )
         v = session(request)
         csrf(request, v)
         body = await payload(request)
@@ -352,12 +421,60 @@ def create_app(settings, store, storage, dispatcher, provider=None):
         cookie(r, v)
         return r
 
+    @app.post("/api/payment-status")
+    async def payment_status(request: Request):
+        v = session(request)
+        csrf(request, v)
+        require_live()
+        await throttle(request, "payment")
+        body = await payload(request)
+        txn = body.get("transaction_id")
+        if settings.billing_provider != "paddle" or not valid_id(txn, "txn"):
+            raise HTTPException(400, "Invalid transaction.")
+        intent = await call("payment_lookup", {"transaction_id": txn})
+        if not intent or intent["owner"] != v["uid"]:
+            raise HTTPException(
+                404,
+                "Checkout not found in this workspace. Restore your recovery key first.",
+            )
+        try:
+            status = await reconcile_paddle(provider, store, txn)
+        except BillingError as e:
+            raise HTTPException(503, str(e)) from None
+        return {"status": status}
+
     @app.post("/api/payment-event")
     async def payment_event(request: Request):
         require_live()
         body = await request.body()
         if len(body) > 65536:
             raise HTTPException(413, "Event too large.")
+        if settings.billing_provider == "paddle":
+            try:
+                event = provider.webhook(
+                    body, request.headers.get("paddle-signature", "")
+                )
+            except BillingError as e:
+                raise HTTPException(400, str(e)) from None
+            if event:
+                intent = await call(
+                    "payment_lookup", {"transaction_id": event["transaction_id"]}
+                )
+                if not intent:
+                    # This seller may offer other products. Only server-created
+                    # Pageweft checkouts belong in this app's fulfillment queue.
+                    return {"received": True, "ignored": True}
+                pending = await call("payment_event", event)
+                if pending:
+                    if payment_dispatcher:
+                        try:
+                            await payment_dispatcher()
+                        except Exception:
+                            # Already durable; the hourly owner job also retries.
+                            await call("event", {"kind": "reconcile_error"})
+                    else:
+                        await process_paddle_events(provider, store)
+            return {"received": True}
         try:
             event = provider.webhook(body, request.headers.get("x-signature", ""))
             if event:

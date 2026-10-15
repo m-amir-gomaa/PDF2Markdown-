@@ -23,7 +23,7 @@ def web_app():
     from threading import Lock
     from web.studio import create_app
     from web.config import Settings
-    from modal_fn import book_store, run_book
+    from modal_fn import book_store, run_book, process_payment_events
 
     storage_lock = Lock()
 
@@ -32,6 +32,10 @@ def web_app():
 
     async def dispatch(job_id):
         call = await run_book.spawn.aio(job_id)
+        return call.object_id
+
+    async def dispatch_payments():
+        call = await process_payment_events.spawn.aio()
         return call.object_id
 
     async def storage(operation, arguments):
@@ -79,7 +83,13 @@ def web_app():
 
         return await asyncio.to_thread(serialized)
 
-    return create_app(Settings.from_env(), store, storage, dispatch)
+    return create_app(
+        Settings.from_env(),
+        store,
+        storage,
+        dispatch,
+        payment_dispatcher=dispatch_payments,
+    )
 
 
 @app.local_entrypoint()
